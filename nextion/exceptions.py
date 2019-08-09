@@ -7,5 +7,10 @@ command_failed_codes = {
     0x1F: "IO operation failed", 0x20: "Undefined escape characters", 0x23: "Too long variable name"
 }
 
+
 class CommandFailed(Exception):
+    pass
+
+
+class CommandTimeout(Exception):
     pass
