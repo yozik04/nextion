@@ -102,7 +102,16 @@ class Nextion:
         return await self.command('get %s' % key)
 
     async def set(self, key, value):
-        return await self.command('%s=%s' % (key, str(value)))
+        if isinstance(value, str):
+            value = '"%s"' % value
+        elif isinstance(value, float):
+            logger.warn('Float is not supported. Converting to string')
+            value = '"%s"' % str(value)
+        elif isinstance(value, int):
+            value = str(value)
+        else:
+            raise AssertionError('value type "%s" is not supported for set' % type(value).__name__)
+        return await self.command('%s=%s' % (key, value))
 
     async def command(self, command, timeout=0.1):
         async with self.command_lock:
@@ -153,7 +162,8 @@ class Nextion:
             return data or result
 
     async def sleep(self, on: bool):
-        await self.set('sleep', '1' if on else '0')
+        await self.set('sleep', 1 if on else 0)
+        await asyncio.sleep(0.15)
 
     async def dim(self, val: int):
         assert 0 <= val <= 100
