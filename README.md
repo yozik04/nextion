@@ -3,6 +3,12 @@ Lightweight Python 3.5+ async library to control Nextion displays.
 
 # Simple usage:
 ```python
+import asyncio
+import logging
+import random
+
+from nextion import Nextion
+
 async def run():
     client = Nextion('/dev/ttyS1', 9600)
     await client.connect()
