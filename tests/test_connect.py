@@ -1,6 +1,6 @@
 import pytest
 
-from nextion.client import Nextion
+from nextion import Nextion
 
 @pytest.mark.asyncio
 async def test_connect():
