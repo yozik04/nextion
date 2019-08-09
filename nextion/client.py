@@ -54,8 +54,6 @@ class NextionProtocol(asyncio.Protocol):
 
 
 class Nextion:
-    connection: NextionProtocol
-
     def __init__(self, url, baudrate):
         self.url = url
         self.baudrate = baudrate
