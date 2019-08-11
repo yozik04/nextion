@@ -3,10 +3,6 @@ from os import path as p
 
 from setuptools import setup, find_packages
 
-needs_pytest = {'pytest', 'test', 'ptr'}.intersection(sys.argv)
-pytest_runner = ['pytest-runner'] if needs_pytest else []
-
-
 def read(filename, parent=None):
     parent = (parent or __file__)
 
@@ -54,11 +50,8 @@ setup(
         'Programming Language :: Python :: 3'
     ],
     install_requires=list(parse_requirements('requirements.txt')),
-    setup_requires=[] + pytest_runner,
     tests_require=[
-        'pytest',
-        'pytest-asyncio',
-        'pytest-mock',
+        'asynctest',
         'mock'
     ]
 )
