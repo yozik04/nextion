@@ -3,8 +3,25 @@ import binascii
 import logging
 import struct
 import typing
+from enum import IntEnum
 
 import serial_asyncio
+
+
+class EventType(IntEnum):
+    TOUCH = 0x65  # Touch event
+    TOUCH_COORDINATE = 0x67  # Touch coordinate
+    TOUCH_IN_SLEEP = 0x68  # Touch event in sleep mode
+    AUTO_SLEEP = 0x86  # Device automatically enters into sleep mode
+    AUTO_WAKE = 0x87  # Device automatically wake up
+    STARTUP = 0x88  # System successful start up
+    SD_CARD_UPGRADE = 0x89  # Start SD card upgrade
+
+
+class ResponseType(IntEnum):
+    STRING = 0x70
+    NUMBER = 0x71
+    PAGE = 0x66
 
 from .exceptions import CommandFailed, CommandTimeout, command_failed_codes
 
@@ -31,7 +48,7 @@ class NextionProtocol(asyncio.Protocol):
         self.connect_future.set_result(True)
 
     def is_event(self, message):
-        return len(message) > 0 and message[0] in [0x65, 0x67, 0x68, 0x86, 0x87, 0x88, 0x89]
+        return len(message) > 0 and message[0] in EventType.__members__.values()
 
     def data_received(self, data):
         self.buffer += data
@@ -71,6 +88,24 @@ class Nextion:
 
     def event_message_handler(self, message):
         logger.debug('Handle event: %s', message)
+
+        typ = message[0]
+        if typ == EventType.TOUCH:  # Touch event
+            pass
+        elif typ == EventType.TOUCH_COORDINATE:  # Touch coordinate
+            pass
+        elif typ == EventType.TOUCH_IN_SLEEP:  # Touch event in sleep mode
+            pass
+        elif typ == EventType.AUTO_SLEEP:  # Device automatically enters into sleep mode
+            pass
+        elif typ == EventType.AUTO_SLEEP:  # Device automatically wake up
+            pass
+        elif typ == EventType.STARTUP:  # System successful start up
+            pass
+        elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
+            pass
+        else:
+            logger.warn('Other event: %02x', typ)
 
     def _make_protocol(self) -> NextionProtocol:
         return NextionProtocol(event_message_handler=self.event_message_handler)
@@ -154,11 +189,11 @@ class Nextion:
                     else:
                         typ = response[0]
                         raw = response[1:]
-                        if typ == 0x66:  # Page ID
+                        if typ == ResponseType.PAGE:  # Page ID
                             data = raw[1]
-                        elif typ == 0x70:  # string
+                        elif typ == ResponseType.STRING:  # string
                             data = raw.decode()
-                        elif typ == 0x71:  # number
+                        elif typ == ResponseType.NUMBER:  # number
                             data = struct.unpack('i', raw)[0]
                         else:
                             logger.error("Unknown data received: %s" % binascii.hexlify(response))
