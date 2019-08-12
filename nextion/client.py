@@ -81,8 +81,8 @@ class NextionProtocol(asyncio.Protocol):
         self.connect_future = asyncio.get_event_loop().create_future()
 
 
-Touch = namedtuple('Touch', 'page_id component_id touch_event')
-TouchCoordinate = namedtuple('TouchCoordinate', 'x y touch_event')
+TouchDataPayload = namedtuple('Touch', 'page_id component_id touch_event')
+TouchCoordinateDataPayload = namedtuple('TouchCoordinate', 'x y touch_event')
 
 class Nextion:
     def __init__(self, url: str, baudrate: int, event_handler: typing.Callable = None):
@@ -97,11 +97,11 @@ class Nextion:
 
         typ = message[0]
         if typ == EventType.TOUCH:  # Touch event
-            self.event_handler(EventType(typ), Touch._make(struct.unpack('BBB', message[1:])))
+            self.event_handler(EventType(typ), TouchDataPayload._make(struct.unpack('BBB', message[1:])))
         elif typ == EventType.TOUCH_COORDINATE:  # Touch coordinate
-            self.event_handler(EventType(typ), TouchCoordinate._make(struct.unpack('HHB', message[1:])))
+            self.event_handler(EventType(typ), TouchCoordinateDataPayload._make(struct.unpack('HHB', message[1:])))
         elif typ == EventType.TOUCH_IN_SLEEP:  # Touch event in sleep mode
-            self.event_handler(EventType(typ), TouchCoordinate._make(struct.unpack('HHB', message[1:])))
+            self.event_handler(EventType(typ), TouchCoordinateDataPayload._make(struct.unpack('HHB', message[1:])))
         elif typ == EventType.AUTO_SLEEP:  # Device automatically enters into sleep mode
             self.event_handler(EventType(typ), None)
         elif typ == EventType.AUTO_SLEEP:  # Device automatically wake up
