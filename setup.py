@@ -1,7 +1,7 @@
-import sys
 from os import path as p
 
 from setuptools import setup, find_packages
+
 
 def read(filename, parent=None):
     parent = (parent or __file__)
