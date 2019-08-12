@@ -3,6 +3,7 @@ import binascii
 import logging
 import struct
 import typing
+from collections import namedtuple
 from enum import IntEnum
 
 import serial_asyncio
@@ -22,6 +23,7 @@ class ResponseType(IntEnum):
     STRING = 0x70
     NUMBER = 0x71
     PAGE = 0x66
+
 
 from .exceptions import CommandFailed, CommandTimeout, command_failed_codes
 
@@ -79,33 +81,37 @@ class NextionProtocol(asyncio.Protocol):
         self.connect_future = asyncio.get_event_loop().create_future()
 
 
+Touch = namedtuple('Touch', 'page_id component_id touch_event')
+TouchCoordinate = namedtuple('TouchCoordinate', 'x y touch_event')
+
 class Nextion:
-    def __init__(self, url, baudrate):
+    def __init__(self, url: str, baudrate: int, event_handler: typing.Callable = None):
         self.url = url
         self.baudrate = baudrate
         self.connection = None
         self.command_lock = asyncio.Lock()
+        self.event_handler = event_handler or (lambda t, d: logger.info('Event %s data: %s' % t, str(d)))
 
     def event_message_handler(self, message):
         logger.debug('Handle event: %s', message)
 
         typ = message[0]
         if typ == EventType.TOUCH:  # Touch event
-            pass
+            self.event_handler(EventType(typ), Touch._make(struct.unpack('BBB', message[1:])))
         elif typ == EventType.TOUCH_COORDINATE:  # Touch coordinate
-            pass
+            self.event_handler(EventType(typ), TouchCoordinate._make(struct.unpack('HHB', message[1:])))
         elif typ == EventType.TOUCH_IN_SLEEP:  # Touch event in sleep mode
-            pass
+            self.event_handler(EventType(typ), TouchCoordinate._make(struct.unpack('HHB', message[1:])))
         elif typ == EventType.AUTO_SLEEP:  # Device automatically enters into sleep mode
-            pass
+            self.event_handler(EventType(typ), None)
         elif typ == EventType.AUTO_SLEEP:  # Device automatically wake up
-            pass
+            self.event_handler(EventType(typ), None)
         elif typ == EventType.STARTUP:  # System successful start up
-            pass
+            self.event_handler(EventType(typ), None)
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
-            pass
+            self.event_handler(EventType(typ), None)
         else:
-            logger.warn('Other event: %02x', typ)
+            logger.warn('Other event: 0x%02x', typ)
 
     def _make_protocol(self) -> NextionProtocol:
         return NextionProtocol(event_message_handler=self.event_message_handler)
