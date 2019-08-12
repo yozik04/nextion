@@ -14,12 +14,15 @@ logger = logging.getLogger('nextion').getChild(__name__)
 class NextionProtocol(asyncio.Protocol):
     EOL = b'\xff\xff\xff'
 
-    def __init__(self, event_handler: typing.Callable):
+    def __init__(self, event_message_handler: typing.Callable):
         self.transport = None
         self.buffer = b''
         self.queue = asyncio.Queue()
         self.connect_future = asyncio.get_event_loop().create_future()
-        self.event_handler = event_handler
+        self.event_message_handler = event_message_handler
+
+    async def wait_connection(self):
+        await self.connect_future
 
     def connection_made(self, transport):
         self.transport = transport
@@ -37,10 +40,16 @@ class NextionProtocol(asyncio.Protocol):
             for message in messages:
                 logger.debug('received: "%s"', binascii.hexlify(message))
                 if self.is_event(message):
-                    self.event_handler(message)
+                    self.event_message_handler(message)
                 else:
                     self.queue.put_nowait(message)
             self.buffer = messages[-1]
+
+    def read_no_wait(self):
+        return self.queue.get_nowait()
+
+    async def read(self):
+        return await self.queue.get()
 
     def write(self, data):
         if isinstance(data, str):
@@ -60,17 +69,17 @@ class Nextion:
         self.connection = None
         self.command_lock = asyncio.Lock()
 
-    def event_handler(self, message):
+    def event_message_handler(self, message):
         logger.debug('Handle event: %s', message)
 
-    def make_protocol(self) -> NextionProtocol:
-        return NextionProtocol(event_handler=self.event_handler)
+    def _make_protocol(self) -> NextionProtocol:
+        return NextionProtocol(event_message_handler=self.event_message_handler)
 
     async def connect(self):
         loop = asyncio.get_event_loop()
-        _, self.connection = await serial_asyncio.create_serial_connection(loop, self.make_protocol, url=self.url,
+        _, self.connection = await serial_asyncio.create_serial_connection(loop, self._make_protocol, url=self.url,
                                                                            baudrate=self.baudrate)
-        await self.connection.connect_future
+        await self.connection.wait_connection()
 
         self.connection.write('')
 
@@ -92,7 +101,7 @@ class Nextion:
 
     async def _read(self, timeout=0.1):
         try:
-            return await asyncio.wait_for(self.connection.queue.get(), timeout=timeout)
+            return await asyncio.wait_for(self.connection.read(), timeout=timeout)
         except asyncio.TimeoutError as e:
             raise CommandTimeout("Command response was not received") from e
 
@@ -115,7 +124,7 @@ class Nextion:
         async with self.command_lock:
             try:
                 while True:
-                    logger.debug("Dropping dangling: %s", self.connection.queue.get_nowait())
+                    logger.debug("Dropping dangling: %s", self.connection.read_no_wait())
             except asyncio.QueueEmpty:
                 pass
 

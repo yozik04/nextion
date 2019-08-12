@@ -11,10 +11,9 @@ def with_client(func):
         client = Nextion('/dev/ttyS1', 9600)
 
         protocol_mock = asynctest.create_autospec(NextionProtocol)
-        protocol_mock.connect_future = asyncio.Future()
-        protocol_mock.connect_future.set_result(True)
-        protocol_mock.queue = asynctest.create_autospec(asyncio.Queue)
-        protocol_mock.queue.get_nowait.side_effect = asyncio.QueueEmpty
+        protocol_mock.wait_connection = asynctest.CoroutineMock()
+        protocol_mock.read = asynctest.create_autospec(asyncio.Queue)
+        protocol_mock.read_no_wait = asynctest.mock.Mock(side_effect=asyncio.QueueEmpty)
         create_serial_connection.return_value = None, protocol_mock
         await func(cls, client, protocol_mock)
 
