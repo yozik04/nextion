@@ -1,10 +1,10 @@
 dist: xenial
 language: python
 python:
-- "3.5"
+- '3.5'
 - '3.6'
 - '3.7'
-- 'pypy3.5'
+- pypy3.5
 install:
 - pip install .
 - pip install -r requirements.txt
@@ -17,4 +17,4 @@ deploy:
   on:
     tags: true
   password:
-    secure: IXSg5Q83/RT6Rt/2Gn+fvyWNVTP8dFZVdG3Eb0OTul0IDgRfqVrsv+KVVOeJYhKfj0+F/w4G2Up0131G0zIxnZPn3XjJ4EzQd5n+S8eCrEVLkfj+42S5kSxbM25uRkoLmK6zggRKiFGbdz8QH53GHiNU1Z1GNFu2tWEbG7WR9hsyn5ed2rBEnGAfjfV6OJg7+xh6wrTtM+0iDsIgz4pS5mYQLRwauHpVUh0djWLaEkwotTk0APw09mom+ICNwqgabMWCYfRKkyZiGOkU3jVrS7OUH6FZHFER/zVyqebmbahpuRkO73Gc+2VBHugqNuASDi+Dtz6nUSl4G/2je6gOfCCnDAwRjRgMSGxfXYyNcZ9fq+LcIv6G1xBDazSWu1IkfuaroDpHdfEReU9XC41s9q3ck/yLfyegYIyrDv1UyqomOGrdSVE9Yym3KeSidqBA1MgwY0nkPckvV8fm1aDoRYuChE2aTBtyZqhOhd6XNaqq7BCV+9OgitpDoFWQQ/1frs5LWW7pxRBChhpOwXQoukcSdDfgq4wGFMruLMKuMoFYSNAB+Lodkps+7zs8GjErCRF+Pt6orWngGemeKlZLN2h4kb14DJpGFg4+aFPEs9F9zYbV0SBILRMlKiF6UR9/t0DROnNByvv2Xsq8dsdhhEelK2goZmfKXUhu+6XrhgU=
+    secure: C/4x9APNDOA81F2glr0wXyy1setMICfzbxNgXFgznnXMsea4trsoj+WbBTbwDgzPxoXiKmzHz2Tx3gCBb9iu6Wt7YnPH9mu8EUvoTfp1yzaohdURcI3fDiOqs7Hxw9a6leCHnkeHwJLRRfAy3TdLREGK9NOboKIYc/maVlG2NSC80pVKHGeSulItozLqq0ojtGpcwij/6BSIeYBFHo+StU/hdYo2vr68bGOzQj/pGiTexpOlyFxLlcgfggvDH0QaaIBPmp+yfpPMGtG7YJ/ZsR+/EnfmK4Ay/CPEjGyiTR7yutyDd20bj+lVONbcpJCTh7ncNxnf84kvd/KSIvBFDwWdqyP1gnCYXzNxw+GpkdowTrUV1Fe//wDtgcn37h0efW1uCore0N4nnsMKZwTcLoJD+WoCbF4esHzcqjj838U9+OR8tE1kKKNsZbY6QmNuTisMTqeLt25ogn/hfnfxts+O51LAiTqASJttzyHGiCqS+mrtrdj5e36JexLxlStsrtEVUlAcWgBssvjU/ZsvcMlYlm2VXEb1/4JuW5/pNhAw0KB6fEAT720B1Sh4/YZV/ogbORv0IfhRj2ZSFTvnQagBKc20o+2TfuUvd+jBjCKPHlC/PF/JA+hCNBHmXhRmLBpGdKutdanFS53I7TaSsmNEOWZxY8w8lXGk3CASlqA=
