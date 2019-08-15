@@ -1,7 +1,11 @@
-# Nextion serial client
+# Nextion serial client [![Build Status](https://travis-ci.org/yozik04/nextion.svg?branch=master)](https://travis-ci.org/yozik04/nextion)
 Lightweight Python 3.5+ async library to control Nextion displays.
 
-# Simple usage:
+## Installation
+### Pypi
+`pip install nextion`
+
+## Simple usage:
 ```python
 import asyncio
 import logging
@@ -19,7 +23,8 @@ async def run():
     client = Nextion('/dev/ttyS1', 9600, event_handler)
     await client.connect()
 
-    # await client.sleep(True)
+    # await client.sleep()
+    # await client.wakeup()
 
     # await client.command('sendxy=0')
 
@@ -46,4 +51,5 @@ if __name__ == '__main__':
 ```
 
 # Additional resources:
-https://www.itead.cc/wiki/Nextion_Instruction_Set
+- https://www.itead.cc/wiki/Nextion_Instruction_Set
+- [PyPI](https://pypi.org/project/nextion/)
