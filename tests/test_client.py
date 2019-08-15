@@ -16,7 +16,7 @@ class TestClient(asynctest.TestCase):
 
     @with_client
     async def test_get(self, client, protocol):
-        client.connection = protocol
+        client._connection = protocol
 
         response_data = binascii.unhexlify('7101000000')
 
@@ -29,7 +29,7 @@ class TestClient(asynctest.TestCase):
 
     @with_client
     async def test_set(self, client, protocol):
-        client.connection = protocol
+        client._connection = protocol
 
         protocol.read = asynctest.CoroutineMock(side_effect=[b'\01', b''])
 
