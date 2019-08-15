@@ -25,7 +25,7 @@ class ResponseType(IntEnum):
     PAGE = 0x66
 
 
-from .exceptions import CommandFailed, CommandTimeout, command_failed_codes
+from .exceptions import CommandFailed, CommandTimeout
 
 logger = logging.getLogger('nextion').getChild(__name__)
 
@@ -90,7 +90,7 @@ class Nextion:
         self.baudrate = baudrate
         self.connection = None
         self.command_lock = asyncio.Lock()
-        self.event_handler = event_handler or (lambda t, d: logger.info('Event %s data: %s' % t, str(d)))
+        self.event_handler = event_handler or (lambda t, d: logger.info('Event %s data: %s' % (t, str(d))))
 
     def event_message_handler(self, message):
         logger.debug('Handle event: %s', message)
@@ -186,20 +186,15 @@ class Nextion:
                         if response_code == 0x01:  # success
                             result = True
                         else:
-                            error = command_failed_codes.get(response_code)
-                            if error:
-                                raise CommandFailed('"%s" command failed: %s' % (command, error))
-                            else:
-                                logger.error("Unknown response code: %s" % binascii.hexlify(response_code))
-                                result = False
+                            raise CommandFailed(response_code)
                     else:
-                        typ = response[0]
+                        type_ = response[0]
                         raw = response[1:]
-                        if typ == ResponseType.PAGE:  # Page ID
+                        if type_ == ResponseType.PAGE:  # Page ID
                             data = raw[1]
-                        elif typ == ResponseType.STRING:  # string
+                        elif type_ == ResponseType.STRING:  # string
                             data = raw.decode()
-                        elif typ == ResponseType.NUMBER:  # number
+                        elif type_ == ResponseType.NUMBER:  # number
                             data = struct.unpack('i', raw)[0]
                         else:
                             logger.error("Unknown data received: %s" % binascii.hexlify(response))
