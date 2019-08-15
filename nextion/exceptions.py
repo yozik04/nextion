@@ -1,5 +1,3 @@
-import binascii
-
 command_failed_codes = {
     0x00: "Invalid instruction", 0x02: "Component ID invalid",
     0x03: "Page ID invalid", 0x04: "Picture ID invalid", 0x05: "Font ID invalid",
@@ -11,11 +9,11 @@ command_failed_codes = {
 
 
 class CommandFailed(Exception):
-    def __init__(self, code):
+    def __init__(self, command, code):
         if code in command_failed_codes:
-            msg = command_failed_codes[code]
+            msg = "%s for command: %s" % (command_failed_codes[code], command)
         else:
-            msg = "Unknown response code: %s" % binascii.hexlify(code)
+            msg = "Unknown response code 0x%02x for command: '%s'" % (code, command)
 
         super(CommandFailed, self).__init__(msg)
 

@@ -30,7 +30,7 @@ def parse_requirements(filename, parent=None):
 
 setup(
     name='nextion',
-    version='1.0.0',
+    version='1.1.0',
     packages=find_packages(exclude=['tests', 'tests.*']),
     python_requires=">=3.5.1, <4",
     license='LGPL 3',
