@@ -12,25 +12,9 @@ def read(filename, parent=None):
     except IOError:
         return ''
 
-
-def parse_requirements(filename, parent=None):
-    parent = (parent or __file__)
-    filepath = p.join(p.dirname(parent), filename)
-    content = read(filename, parent)
-
-    for line_number, line in enumerate(content.splitlines(), 1):
-        candidate = line.strip()
-
-        if candidate.startswith('-r'):
-            for item in parse_requirements(candidate[2:].strip(), filepath):
-                yield item
-        else:
-            yield candidate
-
-
 setup(
     name='nextion',
-    version='1.1.2',
+    version='1.1.3',
     packages=find_packages(exclude=['tests', 'tests.*']),
     python_requires=">=3.5.1, <4",
     license='LGPL 3',
@@ -49,8 +33,12 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 3'
     ],
-    install_requires=list(parse_requirements('requirements.txt')),
-    setup_requires=['wheel'],
+    install_requires=[
+        'pyserial-asyncio'
+    ],
+    setup_requires=[
+        'wheel'
+    ],
     tests_require=[
         'asynctest',
         'mock'
