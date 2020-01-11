@@ -33,6 +33,13 @@ class NextionProtocol(asyncio.Protocol):
         self.connect_future = asyncio.get_event_loop().create_future()
         self.event_message_handler = event_message_handler
 
+    def close(self):
+        if self.transport:
+            self.transport.close()
+
+        if not self.connect_future.done():
+            self.connect_future.set_result(False)
+
     async def wait_connection(self):
         await self.connect_future
 
@@ -49,7 +56,7 @@ class NextionProtocol(asyncio.Protocol):
         if self.EOL in self.buffer:
             messages = self.buffer.split(self.EOL)
             for message in messages:
-                logger.debug('received: "%s"', binascii.hexlify(message))
+                logger.debug('received: %s', binascii.hexlify(message))
                 if self.is_event(message):
                     self.event_message_handler(message)
                 else:

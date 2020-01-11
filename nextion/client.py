@@ -8,8 +8,10 @@ from collections import namedtuple
 import serial_asyncio
 
 TIME_TO_RECOVER_FROM_SLEEP = 0.15
+READ_TIMEOUT = 0.15
+BAUDRATES = [2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400]
 
-from .exceptions import CommandFailed, CommandTimeout
+from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
 from .protocol import NextionProtocol, EventType, ResponseType
 
 logger = logging.getLogger('nextion').getChild(__name__)
@@ -19,7 +21,8 @@ TouchCoordinateDataPayload = namedtuple('TouchCoordinate', 'x y touch_event')
 
 
 class Nextion:
-    def __init__(self, url: str, baudrate: int, event_handler: typing.Callable = None, loop=asyncio.get_event_loop()):
+    def __init__(self, url: str, baudrate: int = None, event_handler: typing.Callable = None,
+                 loop=asyncio.get_event_loop()):
         self._loop = loop
 
         self._url = url
@@ -64,22 +67,50 @@ class Nextion:
     def _make_protocol(self) -> NextionProtocol:
         return NextionProtocol(event_message_handler=self.event_message_handler)
 
-    async def connect(self):
-        _, self._connection = await serial_asyncio.create_serial_connection(self._loop, self._make_protocol,
-                                                                            url=self._url,
-                                                                            baudrate=self._baudrate)
-        await self._connection.wait_connection()
-
-        self._connection.write('')
-
-        async with self._command_lock:
-            self._connection.write('connect')
+    async def connect(self) -> bool:
+        connected = False
+        baudrates = BAUDRATES.copy()
+        if self._baudrate:
             try:
-                result = await self._read()
-            except asyncio.TimeoutError as e:
-                raise CommandTimeout('Connect timeout') from e
+                baudrates.remove(self._baudrate)
+            except ValueError:
+                pass
+            baudrates.insert(0, self._baudrate)
 
-        assert result[:6] == b'comok '
+        for baud in baudrates:
+            logger.info('Connecting: %s, baud: %s', self._url, baud)
+            try:
+                _, self._connection = await serial_asyncio.create_serial_connection(self._loop, self._make_protocol,
+                                                                                    url=self._url,
+                                                                                    baudrate=baud)
+            except OSError as e:
+                if e.errno == 2:
+                    raise ConnectionFailed('Connect failed: %s' % e)
+                else:
+                    logger.warning('Baud %s not supported: %s', baud, e)
+                    continue
+
+            await self._connection.wait_connection()
+
+            self._connection.write('')
+
+            async with self._command_lock:
+                self._connection.write('connect')
+                try:
+                    result = await self._read()
+                    if result[:6] == b'comok ':
+                        self._baudrate = baud
+                        connected = True
+                        break
+                    else:
+                        self._connection.close()
+                except asyncio.TimeoutError as e:
+                    self._connection.close()
+
+            await asyncio.sleep(READ_TIMEOUT)
+
+        if not connected:
+            raise ConnectionFailed('Connect failed') from e
 
         data = result[7:].decode().split(",")
         logger.info('Detected model: %s', data[2])
@@ -94,8 +125,9 @@ class Nextion:
         self._sleeping = await self.get('sleep')
 
         logger.info("Successfully connected to the device")
+        return True
 
-    async def _read(self, timeout=0.1):
+    async def _read(self, timeout=READ_TIMEOUT):
         return await asyncio.wait_for(self._connection.read(), timeout=timeout)
 
     async def get(self, key):
@@ -118,7 +150,7 @@ class Nextion:
         else:
             return await self.command('%s=%s' % (key, out_value))
 
-    async def command(self, command, timeout=0.1):
+    async def command(self, command, timeout=READ_TIMEOUT):
         async with self._command_lock:
             try:
                 while True:

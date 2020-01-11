@@ -8,7 +8,15 @@ command_failed_codes = {
 }
 
 
-class CommandFailed(Exception):
+class NextionException(Exception):
+    pass
+
+
+class ConnectionFailed(NextionException):
+    pass
+
+
+class CommandFailed(NextionException):
     def __init__(self, command, code):
         if code in command_failed_codes:
             msg = "%s for command: %s" % (command_failed_codes[code], command)
@@ -18,5 +26,5 @@ class CommandFailed(Exception):
         super(CommandFailed, self).__init__(msg)
 
 
-class CommandTimeout(Exception):
+class CommandTimeout(NextionException):
     pass
