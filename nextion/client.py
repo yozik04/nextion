@@ -21,7 +21,7 @@ TouchCoordinateDataPayload = namedtuple('TouchCoordinate', 'x y touch_event')
 
 
 class Nextion:
-    def __init__(self, url: str, baudrate: int = None, event_handler: typing.Callable = None,
+    def __init__(self, url: str, baudrate: int = None, event_handler: typing.Callable[[EventType, any], None] = None,
                  loop=asyncio.get_event_loop()):
         self._loop = loop
 
@@ -62,7 +62,7 @@ class Nextion:
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
             self.event_handler(EventType(typ), None)
         else:
-            logger.warn('Other event: 0x%02x', typ)
+            logger.warning('Other event: 0x%02x', typ)
 
     def _make_protocol(self) -> NextionProtocol:
         return NextionProtocol(event_message_handler=self.event_message_handler)
@@ -103,8 +103,10 @@ class Nextion:
                         connected = True
                         break
                     else:
+                        logger.warning('Wrong reply to connect attempt. Closing connection')
                         self._connection.close()
                 except asyncio.TimeoutError as e:
+                    logger.warning('Time outed connection attempt. Closing connection')
                     self._connection.close()
 
             await asyncio.sleep(READ_TIMEOUT)

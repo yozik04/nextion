@@ -77,4 +77,6 @@ class NextionProtocol(asyncio.Protocol):
 
     def connection_lost(self, exc):
         logger.error('Connection lost')
-        self.connect_future = asyncio.get_event_loop().create_future()
+        if not self.connect_future.done():
+            self.connect_future.set_result(False)
+        # self.connect_future = asyncio.get_event_loop().create_future()
