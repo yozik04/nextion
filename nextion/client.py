@@ -193,7 +193,7 @@ class Nextion:
                     else:
                         logger.error("Unknown data received: %s" % binascii.hexlify(response))
 
-            return data or result
+            return data if data is not None else result
 
     async def sleep(self):
         if self._sleeping:
