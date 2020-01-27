@@ -50,6 +50,22 @@ if __name__ == '__main__':
     loop.run_forever()
 ```
 
+## Event handling
+
+```event_handler``` method in the example above will be called on every event comming from the display.
+
+| EventType        | Data                       | Data attributes                    |
+|------------------|----------------------------|------------------------------------|
+| TOUCH            | TouchDataPayload           | page_id, component_id, touch_event |
+| TOUCH_COORDINATE | TouchCoordinateDataPayload | x, y, touch_event                  |
+| TOUCH_IN_SLEEP   | TouchCoordinateDataPayload | x, y, touch_event                  |
+| AUTO_SLEEP       | None                       | -                                  |
+| AUTO_WAKE        | None                       | -                                  |
+| STARTUP          | None                       | -                                  |
+| SD_CARD_UPGRADE  | None                       | -                                  |
+
+For some components in the Nextion Editor you need to check `Send Component ID` for required event.
+
 # Additional resources:
 - https://www.itead.cc/wiki/Nextion_Instruction_Set
 - [PyPI](https://pypi.org/project/nextion/)
