@@ -17,7 +17,7 @@ def event_handler(type_, data):
     if type_ == EventType.STARTUP:
         print('We have booted up!')
 
-    logging.info('Event %s data: %s' % (type, str(data)))
+    logging.info('Event %s data: %s', type, str(data))
 
 async def run():
     client = Nextion('/dev/ttyS1', 9600, event_handler)
