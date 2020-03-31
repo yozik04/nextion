@@ -1,14 +1,13 @@
 import asyncio
 
 import asynctest
-
 from nextion.client import Nextion, NextionProtocol
 
 
 def with_client(func):
-    @asynctest.patch('serial_asyncio.create_serial_connection')
+    @asynctest.patch("serial_asyncio.create_serial_connection")
     async def wrapper(cls, create_serial_connection):
-        client = Nextion('/dev/ttyS1', 9600)
+        client = Nextion("/dev/ttyS1", 9600)
 
         protocol_mock = asynctest.create_autospec(NextionProtocol)
         protocol_mock.wait_connection = asynctest.CoroutineMock()

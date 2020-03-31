@@ -4,7 +4,7 @@ import logging
 import typing
 from enum import IntEnum
 
-logger = logging.getLogger('nextion').getChild(__name__)
+logger = logging.getLogger("nextion").getChild(__name__)
 
 
 class EventType(IntEnum):
@@ -24,11 +24,11 @@ class ResponseType(IntEnum):
 
 
 class NextionProtocol(asyncio.Protocol):
-    EOL = b'\xff\xff\xff'
+    EOL = b"\xff\xff\xff"
 
     def __init__(self, event_message_handler: typing.Callable):
         self.transport = None
-        self.buffer = b''
+        self.buffer = b""
         self.queue = asyncio.Queue()
         self.connect_future = asyncio.get_event_loop().create_future()
         self.event_message_handler = event_message_handler
@@ -56,7 +56,7 @@ class NextionProtocol(asyncio.Protocol):
         if self.EOL in self.buffer:
             messages = self.buffer.split(self.EOL)
             for message in messages:
-                logger.debug('received: %s', binascii.hexlify(message))
+                logger.debug("received: %s", binascii.hexlify(message))
                 if self.is_event(message):
                     self.event_message_handler(message)
                 else:
@@ -73,10 +73,10 @@ class NextionProtocol(asyncio.Protocol):
         if isinstance(data, str):
             data = data.encode()
         self.transport.write(data + self.EOL)
-        logger.debug('sent: %s', data)
+        logger.debug("sent: %s", data)
 
     def connection_lost(self, exc):
-        logger.error('Connection lost')
+        logger.error("Connection lost")
         if not self.connect_future.done():
             self.connect_future.set_result(False)
         # self.connect_future = asyncio.get_event_loop().create_future()
