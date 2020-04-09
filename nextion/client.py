@@ -160,7 +160,7 @@ class Nextion:
         if isinstance(value, str):
             out_value = '"%s"' % value
         elif isinstance(value, float):
-            logger.warn("Float is not supported. Converting to string")
+            logger.warning("Float is not supported. Converting to string")
             out_value = '"%s"' % str(value)
         elif isinstance(value, int):
             out_value = str(value)
