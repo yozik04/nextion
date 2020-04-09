@@ -42,6 +42,9 @@ class Nextion:
         self._sleeping = True
         self.sets_todo = {}
 
+    async def on_startup(self):
+        await self.command("bkcmd=3")  # Let's ensure we receive expected responses
+
     async def on_wakeup(self):
         await asyncio.sleep(
             TIME_TO_RECOVER_FROM_SLEEP
@@ -77,6 +80,7 @@ class Nextion:
             self._loop.create_task(self.on_wakeup())
             self.event_handler(EventType(typ), None)
         elif typ == EventType.STARTUP:  # System successful start up
+            self._loop.create_task(self.on_startup())
             self.event_handler(EventType(typ), None)
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
             self.event_handler(EventType(typ), None)
