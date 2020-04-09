@@ -208,6 +208,7 @@ class Nextion:
                     response_code = response[0]
                     if response_code == 0x01:  # success
                         result = True
+                        finished = True
                     else:
                         raise CommandFailed(command, response_code)
                 else:
