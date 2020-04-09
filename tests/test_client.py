@@ -17,7 +17,7 @@ class TestClient(asynctest.TestCase):
         await client.connect()
 
     @with_client
-    async def test_get(self, client, protocol):
+    async def test_get_numeric(self, client, protocol):
         client._connection = protocol
 
         response_data = binascii.unhexlify("7101000000")
@@ -30,6 +30,21 @@ class TestClient(asynctest.TestCase):
         protocol.write.assert_called_once_with("get sleep")
 
         assert result == True
+
+    @with_client
+    async def test_get_string(self, client, protocol):
+        client._connection = protocol
+
+        response_data = binascii.unhexlify("703430")
+
+        protocol.read = asynctest.CoroutineMock(
+            side_effect=[response_data, b"\01", b""]
+        )
+
+        result = await client.get("t16.txt")
+        protocol.write.assert_called_once_with("get t16.txt")
+
+        assert result == '40'
 
     @with_client
     async def test_set(self, client, protocol):

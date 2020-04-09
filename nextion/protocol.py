@@ -53,15 +53,19 @@ class NextionProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         self.buffer += data
-        if self.EOL in self.buffer:
-            messages = self.buffer.split(self.EOL)
-            for message in messages:
-                logger.debug("received: %s", binascii.hexlify(message))
-                if self.is_event(message):
-                    self.event_message_handler(message)
-                else:
-                    self.queue.put_nowait(message)
-            self.buffer = messages[-1]
+
+        while True:
+            message, eol, leftover = self.buffer.partition(self.EOL)
+            if eol == b'':  # EOL not found
+                break
+
+            logger.debug("received: %s", binascii.hexlify(message))
+            self.buffer = leftover
+
+            if self.is_event(message):
+                self.event_message_handler(message)
+            else:
+                self.queue.put_nowait(message)
 
     def read_no_wait(self):
         return self.queue.get_nowait()
