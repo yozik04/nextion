@@ -48,7 +48,7 @@ class Nextion:
         await self.command("bkcmd=3")  # Let's ensure we receive expected responses
 
     async def on_wakeup(self):
-        logging.debug('Updating variables after wakeup: "%s"', str(self.sets_todo))
+        logger.debug('Updating variables after wakeup: "%s"', str(self.sets_todo))
         for k, v in self.sets_todo.items():
             self._loop.create_task(self.set(k, v))
         self.sets_todo = {}
@@ -177,7 +177,7 @@ class Nextion:
             )
 
         if self._sleeping and key not in ["sleep"]:
-            logging.debug(
+            logger.debug(
                 'Device sleeps. Scheduling "%s" set for execution after wakeup', key
             )
             self.sets_todo[key] = value
