@@ -164,7 +164,6 @@ class Nextion:
         await self._connection.close()
         await self.connect()
 
-
     async def _read(self, timeout=IO_TIMEOUT):
         return await asyncio.wait_for(self._connection.read(), timeout=timeout)
 
@@ -299,7 +298,7 @@ class Nextion:
 
         self._connection.start_upload()
         try:
-            self._connection.write("whmi-wri %d,%d,0" % (file_size, 9600))
+            self._connection.write("whmi-wri %d,%d,0" % (file_size, self._baudrate))
             res = await self._read(timeout=1)
             if res != b"\x05":
                 raise IOError(
@@ -312,7 +311,6 @@ class Nextion:
                     if not buf:
                         break
                     self._connection.write(buf, eol=False)
-                    await asyncio.sleep(0.15)
 
                     res = await self._read(timeout=10)
                     if res != b"\x05":

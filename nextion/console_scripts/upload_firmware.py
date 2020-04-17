@@ -6,7 +6,7 @@ from nextion.client import Nextion
 
 
 async def upload(args):
-    nextion = Nextion(args.device, args.baud)
+    nextion = Nextion(args.device, args.baud, reconnect_attempts=1)
     await nextion.connect()
 
     try:
