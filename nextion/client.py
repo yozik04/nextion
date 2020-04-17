@@ -119,23 +119,22 @@ class Nextion:
 
                 self._connection.write("")
 
-                async with self._command_lock:
-                    self._connection.write("connect")
-                    try:
-                        result = await self._read()
-                        if result[:6] == b"comok ":
-                            self._baudrate = baud
-                            break
-                        else:
-                            logger.warning(
-                                "Wrong reply to connect attempt. Closing connection"
-                            )
-                            self._connection.close()
-                    except asyncio.TimeoutError as e:
+                self._connection.write("connect")
+                try:
+                    result = await self._read()
+                    if result[:6] == b"comok ":
+                        self._baudrate = baud
+                        break
+                    else:
                         logger.warning(
-                            "Time outed connection attempt. Closing connection"
+                            "Wrong reply to connect attempt. Closing connection"
                         )
                         self._connection.close()
+                except asyncio.TimeoutError as e:
+                    logger.warning(
+                        "Time outed connection attempt. Closing connection"
+                    )
+                    self._connection.close()
 
                 await asyncio.sleep(IO_TIMEOUT)
             else:
@@ -278,3 +277,44 @@ class Nextion:
     async def dim(self, val: int):
         assert 0 <= val <= 100
         await self.set("dim", val)
+
+    async def upload_firmware(self, file):
+        p = Path(file)
+        if not p.exists():
+            raise IOError("File %s does not exist" % file)
+        if not p.is_file():
+            raise IOError("File %s is not a regular file")
+        file_size = p.stat().st_size
+
+        logger.info("About to upload %s(%d bytes)" % (file, file_size))
+        await self.set("sleep", 0)
+        await asyncio.sleep(0.15)
+        await self.set("usup", 1)
+        await self.set("ussp", 0)
+
+        self._connection.start_upload()
+        try:
+            self._connection.write("whmi-wri %d,%d,0" % (file_size, 9600))
+            res = await self._read(timeout=1)
+            if res != b"\x05":
+                raise IOError(
+                    "Wrong response to upload command: %s" % binascii.hexlify(res)
+                )
+
+            with open(file, "rb") as fh:
+                while True:
+                    buf = fh.read(4096)
+                    if not buf:
+                        break
+                    self._connection.write(buf, eol=False)
+                    await asyncio.sleep(0.15)
+
+                    res = await self._read(timeout=10)
+                    if res != b"\x05":
+                        raise IOError(
+                            "Wrong response while uploading chunk: %s"
+                            % binascii.hexlify(res)
+                        )
+
+        finally:
+            self._connection.stop_upload()
