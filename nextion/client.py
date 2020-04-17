@@ -149,7 +149,7 @@ class Nextion:
             try:
                 await self.command("bkcmd=3")
             except CommandTimeout as e:
-                raise ConnectionFailed("Connection setup failed") from e
+                pass  # it is fine
             self._sleeping = await self.get("sleep")
 
             logger.info("Successfully connected to the device")
