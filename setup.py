@@ -37,4 +37,9 @@ setup(
     install_requires=["pyserial-asyncio"],
     setup_requires=["wheel"],
     tests_require=["asynctest", "mock"],
+    entry_points={
+        "console_scripts": [
+            "nextion-fw-upload = nextion.console_scripts.upload_firmware:main"
+        ]
+    },
 )

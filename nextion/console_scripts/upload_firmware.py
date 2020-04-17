@@ -15,7 +15,7 @@ async def upload(args):
         logging.exception("Failed to upload firmware")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("device", help="device serial port")
     parser.add_argument("baud", type=int, help="baud rate")
@@ -30,3 +30,7 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(upload(args))
+
+
+if __name__ == "__main__":
+    main()
