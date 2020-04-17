@@ -11,8 +11,7 @@ import serial_asyncio
 from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
 from .protocol import EventType, NextionProtocol, ResponseType
 
-TIME_TO_RECOVER_FROM_SLEEP = 0.15
-IO_TIMEOUT = 0.15
+IO_TIMEOUT = 0.5  # picture change on background takes 180ms + first variable set after wakeup takes 240ms
 BAUDRATES = [2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400]
 
 
@@ -49,9 +48,7 @@ class Nextion:
         await self.command("bkcmd=3")  # Let's ensure we receive expected responses
 
     async def on_wakeup(self):
-        await asyncio.sleep(
-            TIME_TO_RECOVER_FROM_SLEEP
-        )  # do not execute next messages until full wakeup
+        logging.debug('Updating variables after wakeup: "%s"', str(self.sets_todo))
         for k, v in self.sets_todo.items():
             self._loop.create_task(self.set(k, v))
         self.sets_todo = {}
