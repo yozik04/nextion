@@ -147,10 +147,10 @@ class Nextion:
             logger.debug("Flash size: %s", data[6])
 
             try:
-                await self.command("bkcmd=3", attempts=1)
+                await self._command("bkcmd=3", attempts=1)
             except CommandTimeout as e:
                 pass  # it is fine
-            self._sleeping = await self.get("sleep")
+            self._sleeping = await self._command("get sleep")
 
             logger.info("Successfully connected to the device")
         except ConnectionFailed:
@@ -187,8 +187,9 @@ class Nextion:
         else:
             return await self.command("%s=%s" % (key, out_value), timeout=timeout)
 
-    async def command(self, command, timeout=IO_TIMEOUT, attempts=None):
+    async def _command(self, command, timeout=IO_TIMEOUT, attempts=None):
         assert attempts is None or attempts > 0
+
         attempts_remained = attempts or self._reconnect_attempts
         last_exception = None
         while attempts_remained > 0:
@@ -201,61 +202,65 @@ class Nextion:
                     logger.error("Reconnect failed")
                     await asyncio.sleep(1)
                     continue
-            async with self._command_lock:
+
+            try:
+                while True:
+                    logger.debug(
+                        "Dropping dangling: %s", self._connection.read_no_wait()
+                    )
+            except asyncio.QueueEmpty:
+                pass
+
+            last_exception = None
+            self._connection.write(command)
+
+            result = None
+            data = None
+            finished = False
+
+            while not finished:
                 try:
-                    while True:
-                        logger.debug(
-                            "Dropping dangling: %s", self._connection.read_no_wait()
-                        )
-                except asyncio.QueueEmpty:
-                    pass
+                    response = await self._read(timeout=timeout)
+                except asyncio.TimeoutError as e:
+                    logger.error('Command "%s" timeout.', command)
+                    last_exception = CommandTimeout(
+                        'Command "%s" response was not received' % command
+                    )
+                    await asyncio.sleep(IO_TIMEOUT)
+                    break
 
-                last_exception = None
-                self._connection.write(command)
-
-                result = None
-                data = None
-                finished = False
-
-                while not finished:
-                    try:
-                        response = await self._read(timeout=timeout)
-                    except asyncio.TimeoutError as e:
-                        logger.error('Command "%s" timeout.', command)
-                        last_exception = CommandTimeout(
-                            'Command "%s" response was not received' % command
-                        )
-                        await asyncio.sleep(IO_TIMEOUT)
-                        break
-
-                    res_len = len(response)
-                    if res_len == 0:
+                res_len = len(response)
+                if res_len == 0:
+                    finished = True
+                elif res_len == 1:  # is response code
+                    response_code = response[0]
+                    if response_code == 0x01:  # success
+                        result = True
                         finished = True
-                    elif res_len == 1:  # is response code
-                        response_code = response[0]
-                        if response_code == 0x01:  # success
-                            result = True
-                            finished = True
-                        else:
-                            raise CommandFailed(command, response_code)
                     else:
-                        type_ = response[0]
-                        raw = response[1:]
-                        if type_ == ResponseType.PAGE:  # Page ID
-                            data = raw[1]
-                        elif type_ == ResponseType.STRING:  # string
-                            data = raw.decode()
-                        elif type_ == ResponseType.NUMBER:  # number
-                            data = struct.unpack("i", raw)[0]
-                        else:
-                            logger.error(
-                                "Unknown data received: %s" % binascii.hexlify(response)
-                            )
-                else:  # this will run if loop ended successfully
-                    return data if data is not None else result
+                        raise CommandFailed(command, response_code)
+                else:
+                    type_ = response[0]
+                    raw = response[1:]
+                    if type_ == ResponseType.PAGE:  # Page ID
+                        data = raw[1]
+                    elif type_ == ResponseType.STRING:  # string
+                        data = raw.decode()
+                    elif type_ == ResponseType.NUMBER:  # number
+                        data = struct.unpack("i", raw)[0]
+                    else:
+                        logger.error(
+                            "Unknown data received: %s" % binascii.hexlify(response)
+                        )
+            else:  # this will run if loop ended successfully
+                return data if data is not None else result
 
         if last_exception:
             raise last_exception
+
+    async def command(self, command, timeout=IO_TIMEOUT, attempts=None):
+        async with self._command_lock:
+            return await self._command(command, timeout=timeout, attempts=attempts)
 
     async def sleep(self):
         if self._sleeping:
