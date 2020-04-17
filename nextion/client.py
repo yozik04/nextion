@@ -11,7 +11,7 @@ import serial_asyncio
 from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
 from .protocol import EventType, NextionProtocol, ResponseType
 
-IO_TIMEOUT = 0.5  # picture change on background takes 180ms + first variable set after wakeup takes 240ms
+IO_TIMEOUT = 0.5  # Background picture change takes 180ms + first variable set after a wakeup takes 240ms + some buffer.
 BAUDRATES = [2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400]
 
 
@@ -199,6 +199,7 @@ class Nextion:
                 try:
                     logger.info("Reconnecting")
                     await self.connect()
+                    last_exception = None
                 except ConnectionFailed:
                     logger.error("Reconnect failed")
                     await asyncio.sleep(1)
@@ -212,7 +213,6 @@ class Nextion:
             except asyncio.QueueEmpty:
                 pass
 
-            last_exception = None
             self._connection.write(command)
 
             result = None
@@ -256,7 +256,7 @@ class Nextion:
             else:  # this will run if loop ended successfully
                 return data if data is not None else result
 
-        if last_exception:
+        if last_exception is not None:
             raise last_exception
 
     async def command(self, command, timeout=IO_TIMEOUT, attempts=None):
