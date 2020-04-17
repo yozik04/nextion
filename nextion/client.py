@@ -129,12 +129,12 @@ class Nextion:
                         logger.warning(
                             "Wrong reply to connect attempt. Closing connection"
                         )
-                        self._connection.close()
+                        await self._connection.close()
                 except asyncio.TimeoutError as e:
                     logger.warning(
                         "Time outed connection attempt. Closing connection"
                     )
-                    self._connection.close()
+                    await self._connection.close()
 
                 await asyncio.sleep(IO_TIMEOUT)
             else:
@@ -159,6 +159,11 @@ class Nextion:
         except:
             logger.exception("Unexpected exception during connect")
             raise
+
+    async def reconnect(self):
+        await self._connection.close()
+        await self.connect()
+
 
     async def _read(self, timeout=IO_TIMEOUT):
         return await asyncio.wait_for(self._connection.read(), timeout=timeout)
@@ -197,7 +202,7 @@ class Nextion:
             if isinstance(last_exception, CommandTimeout):
                 try:
                     logger.info("Reconnecting")
-                    await self.connect()
+                    await self.reconnect()
                     last_exception = None
                 except ConnectionFailed:
                     logger.error("Reconnect failed")

@@ -31,14 +31,21 @@ class NextionProtocol(asyncio.Protocol):
         self.buffer = b""
         self.queue = asyncio.Queue()
         self.connect_future = asyncio.get_event_loop().create_future()
+        self.disconnect_future = asyncio.get_event_loop().create_future()
         self.event_message_handler = event_message_handler
+        self._upload_mode = False
 
-    def close(self):
+    def start_upload(self):
+        self._upload_mode = True
+
+    def stop_upload(self):
+        self._upload_mode = False
+
+    async def close(self):
         if self.transport:
             self.transport.close()
 
-        if not self.connect_future.done():
-            self.connect_future.set_result(False)
+        await self.disconnect_future
 
     async def wait_connection(self):
         await self.connect_future
@@ -56,7 +63,12 @@ class NextionProtocol(asyncio.Protocol):
 
         while True:
             message, eol, leftover = self.buffer.partition(self.EOL)
-            if eol == b'':  # EOL not found
+            if self._upload_mode:
+                self.buffer = leftover
+                logger.debug("received in upload mode: %s", binascii.hexlify(message))
+                self.queue.put_nowait(message)
+
+            if eol == b"":  # EOL not found
                 break
 
             logger.debug("received: %s", binascii.hexlify(message))
@@ -73,10 +85,10 @@ class NextionProtocol(asyncio.Protocol):
     async def read(self):
         return await self.queue.get()
 
-    def write(self, data):
+    def write(self, data, eol=True):
         if isinstance(data, str):
             data = data.encode()
-        self.transport.write(data + self.EOL)
+        self.transport.write(data + self.EOL if eol else b"")
         logger.debug("sent: %s", data)
 
     def connection_lost(self, exc):
@@ -84,3 +96,5 @@ class NextionProtocol(asyncio.Protocol):
         if not self.connect_future.done():
             self.connect_future.set_result(False)
         # self.connect_future = asyncio.get_event_loop().create_future()
+        if not self.disconnect_future.done():
+            self.disconnect_future.set_result(True)
