@@ -93,70 +93,72 @@ class Nextion:
     def _make_protocol(self) -> NextionProtocol:
         return NextionProtocol(event_message_handler=self.event_message_handler)
 
-    async def connect(self) -> bool:
-        connected = False
-        baudrates = BAUDRATES.copy()
-        if self._baudrate:
-            try:
-                baudrates.remove(self._baudrate)
-            except ValueError:
-                pass
-            baudrates.insert(0, self._baudrate)
-
-        for baud in baudrates:
-            logger.info("Connecting: %s, baud: %s", self._url, baud)
-            try:
-                _, self._connection = await serial_asyncio.create_serial_connection(
-                    self._loop, self._make_protocol, url=self._url, baudrate=baud
-                )
-            except OSError as e:
-                if e.errno == 2:
-                    raise ConnectionFailed("Connect failed: %s" % e)
-                else:
-                    logger.warning("Baud %s not supported: %s", baud, e)
-                    continue
-
-            await self._connection.wait_connection()
-
-            self._connection.write("")
-
-            async with self._command_lock:
-                self._connection.write("connect")
-                try:
-                    result = await self._read()
-                    if result[:6] == b"comok ":
-                        self._baudrate = baud
-                        connected = True
-                        break
-                    else:
-                        logger.warning(
-                            "Wrong reply to connect attempt. Closing connection"
-                        )
-                        self._connection.close()
-                except asyncio.TimeoutError as e:
-                    logger.warning("Time outed connection attempt. Closing connection")
-                    self._connection.close()
-
-            await asyncio.sleep(IO_TIMEOUT)
-
-        if not connected:
-            raise ConnectionFailed("Connect failed") from e
-
-        data = result[7:].decode().split(",")
-        logger.info("Detected model: %s", data[2])
-        logger.info("Firmware version: %s", data[3])
-        logger.info("Serial number: %s", data[5])
-        logger.debug("Flash size: %s", data[6])
-
+    async def connect(self) -> None:
         try:
-            await self.command("bkcmd=3")
-        except CommandTimeout as e:
-            logging.error('Failed to connect')
-            return False
-        self._sleeping = await self.get("sleep")
+            baudrates = BAUDRATES.copy()
+            if self._baudrate:  # if a baud rate specified put it first in array
+                try:
+                    baudrates.remove(self._baudrate)
+                except ValueError:
+                    pass
+                baudrates.insert(0, self._baudrate)
 
-        logger.info("Successfully connected to the device")
-        return True
+            for baud in baudrates:
+                logger.info("Connecting: %s, baud: %s", self._url, baud)
+                try:
+                    _, self._connection = await serial_asyncio.create_serial_connection(
+                        self._loop, self._make_protocol, url=self._url, baudrate=baud
+                    )
+                except OSError as e:
+                    if e.errno == 2:
+                        raise ConnectionFailed("Failed to open serial connection: %s" % e)
+                    else:
+                        logger.warning("Baud %s not supported: %s", baud, e)
+                        continue
+
+                await self._connection.wait_connection()
+
+                self._connection.write("")
+
+                async with self._command_lock:
+                    self._connection.write("connect")
+                    try:
+                        result = await self._read()
+                        if result[:6] == b"comok ":
+                            self._baudrate = baud
+                            break
+                        else:
+                            logger.warning(
+                                "Wrong reply to connect attempt. Closing connection"
+                            )
+                            self._connection.close()
+                    except asyncio.TimeoutError as e:
+                        logger.warning("Time outed connection attempt. Closing connection")
+                        self._connection.close()
+
+                await asyncio.sleep(IO_TIMEOUT)
+            else:
+                raise ConnectionFailed("No baud rate suited")
+
+            data = result[7:].decode().split(",")
+            logger.info("Detected model: %s", data[2])
+            logger.info("Firmware version: %s", data[3])
+            logger.info("Serial number: %s", data[5])
+            logger.debug("Flash size: %s", data[6])
+
+            try:
+                await self.command("bkcmd=3")
+            except CommandTimeout as e:
+                raise ConnectionFailed("Connection setup failed") from e
+            self._sleeping = await self.get("sleep")
+
+            logger.info("Successfully connected to the device")
+        except ConnectionFailed:
+            logger.exception("Connection failed")
+            raise
+        except:
+            logger.exception("Unexpected exception during connect")
+            raise
 
     async def _read(self, timeout=IO_TIMEOUT):
         return await asyncio.wait_for(self._connection.read(), timeout=timeout)
@@ -190,7 +192,9 @@ class Nextion:
         last_exception = None
         while attempts_remained > 0:
             if isinstance(last_exception, CommandTimeout):
-                if not await self.connect():
+                try:
+                    await self.connect()
+                except ConnectionFailed:
                     logger.error("Reconnect failed")
                     await asyncio.sleep(1)
                     continue
