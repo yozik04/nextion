@@ -147,7 +147,7 @@ class Nextion:
             logger.debug("Flash size: %s", data[6])
 
             try:
-                await self.command("bkcmd=3")
+                await self.command("bkcmd=3", attempts=1)
             except CommandTimeout as e:
                 pass  # it is fine
             self._sleeping = await self.get("sleep")
@@ -187,12 +187,15 @@ class Nextion:
         else:
             return await self.command("%s=%s" % (key, out_value), timeout=timeout)
 
-    async def command(self, command, timeout=IO_TIMEOUT):
-        attempts_remained = self._reconnect_attempts
+    async def command(self, command, timeout=IO_TIMEOUT, attempts=None):
+        assert attempts is None or attempts > 0
+        attempts_remained = attempts or self._reconnect_attempts
         last_exception = None
         while attempts_remained > 0:
+            attempts_remained -= 1
             if isinstance(last_exception, CommandTimeout):
                 try:
+                    logger.info('Reconnecting')
                     await self.connect()
                 except ConnectionFailed:
                     logger.error("Reconnect failed")
@@ -207,7 +210,6 @@ class Nextion:
                 except asyncio.QueueEmpty:
                     pass
 
-                attempts_remained-=1
                 last_exception = None
                 self._connection.write(command)
 
@@ -219,7 +221,7 @@ class Nextion:
                     try:
                         response = await self._read(timeout=timeout)
                     except asyncio.TimeoutError as e:
-                        logger.error('Command "%s" timeout. Reconnecting', command)
+                        logger.error('Command "%s" timeout.', command)
                         last_exception = CommandTimeout(
                             'Command "%s" response was not received' % command
                         )
