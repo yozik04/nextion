@@ -28,7 +28,7 @@ class Nextion:
         baudrate: int = None,
         event_handler: typing.Callable[[EventType, any], None] = None,
         loop=asyncio.get_event_loop(),
-        reconnect_attempts:int = 3
+        reconnect_attempts: int = 3,
     ):
         self._loop = loop
 
@@ -108,7 +108,9 @@ class Nextion:
                     )
                 except OSError as e:
                     if e.errno == 2:
-                        raise ConnectionFailed("Failed to open serial connection: %s" % e)
+                        raise ConnectionFailed(
+                            "Failed to open serial connection: %s" % e
+                        )
                     else:
                         logger.warning("Baud %s not supported: %s", baud, e)
                         continue
@@ -130,7 +132,9 @@ class Nextion:
                             )
                             self._connection.close()
                     except asyncio.TimeoutError as e:
-                        logger.warning("Time outed connection attempt. Closing connection")
+                        logger.warning(
+                            "Time outed connection attempt. Closing connection"
+                        )
                         self._connection.close()
 
                 await asyncio.sleep(IO_TIMEOUT)
@@ -193,7 +197,7 @@ class Nextion:
             attempts_remained -= 1
             if isinstance(last_exception, CommandTimeout):
                 try:
-                    logger.info('Reconnecting')
+                    logger.info("Reconnecting")
                     await self.connect()
                 except ConnectionFailed:
                     logger.error("Reconnect failed")
