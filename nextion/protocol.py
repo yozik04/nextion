@@ -85,9 +85,9 @@ class NextionProtocol(asyncio.Protocol):
     async def read(self):
         return await self.queue.get()
 
-    def write(self, data, eol=True):
+    def write(self, data, encoding, eol=True):
         if isinstance(data, str):
-            data = data.encode()
+            data = data.encode(encoding)
         self.transport.write(data + self.EOL if eol else b"")
         logger.debug("sent: %s", data)
 
