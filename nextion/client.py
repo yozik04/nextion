@@ -137,6 +137,14 @@ class Nextion:
         await self._connection.close()
         return False
 
+    @property
+    def encoding(self):
+        return self._encoding
+
+    @encoding.setter
+    def encoding(self, encoding):
+        self._encoding = encoding
+
     async def connect(self) -> None:
         try:
             baudrates = BAUDRATES.copy()

@@ -50,6 +50,26 @@ if __name__ == '__main__':
     loop.run_forever()
 ```
 
+### Nextion constructor parameters
+```
+url: str # serial dev
+baudrate: int # baud rate
+event_handler: typing.Callable[[EventType, any], None] # Event handler function
+loop=asyncio.get_event_loop() # your own event loop
+reconnect_attempts: int = 3 # how many times to try to retry command in case of failure
+encoding: str = 'ascii' # Nextion encoding
+```
+
+### Nextion parameters
+#### Encoding
+You can update encoding on fly (This changes encoding of serial communication only):
+
+`client.encoding = 'latin-1'`
+
+Get current set encoding (Not fetched from the device)
+
+`print(client.encoding)`
+
 ## Event handling
 
 ```event_handler``` method in the example above will be called on every event comming from the display.
