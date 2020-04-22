@@ -44,6 +44,7 @@ class Nextion:
 
         self._sleeping = True
         self.sets_todo = {}
+        self._encoding = ENCODING
 
     async def on_startup(self):
         await self.command("bkcmd=3")  # Let's ensure we receive expected responses
@@ -92,11 +93,10 @@ class Nextion:
         return NextionProtocol(event_message_handler=self.event_message_handler)
     
     def set_encoding(self, encoding):
-        global ENCODING
-        ENCODING = encoding
+        self._encoding = encoding
 
     def get_encoding(self):
-        return ENCODING
+        return self._encoding
 
     async def _connect_at_baud(self, baud):
         delay_between_connect_attempts = (1000000 / baud + 30) / 1000
@@ -117,7 +117,7 @@ class Nextion:
 
         await self._connection.wait_connection()
 
-        self._connection.write("DRAKJHSUYDGBNCJHGJKSHBDN", ENCODING)  # exit active Protocol Reparse and return to passive mode
+        self._connection.write("DRAKJHSUYDGBNCJHGJKSHBDN", self._encoding)  # exit active Protocol Reparse and return to passive mode
 
         await asyncio.sleep(delay_between_connect_attempts)  # (1000000/baud rate)+30ms
 
@@ -125,7 +125,7 @@ class Nextion:
             "connect",  # traditional connect instruction
             "\xff\xffconnect"  # connect instruction using the broadcast address of 65535
         ]:
-            self._connection.write(connect_message, ENCODING)
+            self._connection.write(connect_message, self._encoding)
             try:
                 result = await self._read()
                 if result[:6] == b"comok ":
@@ -240,7 +240,7 @@ class Nextion:
             except asyncio.QueueEmpty:
                 pass
 
-            self._connection.write(command, ENCODING)
+            self._connection.write(command, self._encoding)
 
             result = None
             data = None
@@ -322,7 +322,7 @@ class Nextion:
 
         self._connection.start_upload()
         try:
-            self._connection.write("whmi-wri %d,%d,0" % (file_size, self._baudrate), ENCODING)
+            self._connection.write("whmi-wri %d,%d,0" % (file_size, self._baudrate), self._encoding)
             res = await self._read(timeout=1)
             if res != b"\x05":
                 raise IOError(
@@ -334,7 +334,7 @@ class Nextion:
                     buf = fh.read(4096)
                     if not buf:
                         break
-                    self._connection.write(buf, ENCODING, eol=False)
+                    self._connection.write(buf, self._encoding, eol=False)
 
                     timeout = len(buf) * 12 / self._baudrate + 1
                     res = await self._read(timeout=timeout)
