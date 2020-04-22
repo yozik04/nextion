@@ -27,7 +27,7 @@ class TestClient(asynctest.TestCase):
         )
 
         result = await client.get("sleep")
-        protocol.write.assert_called_once_with("get sleep")
+        protocol.write.assert_called_once_with(b"get sleep")
 
         assert result == True
 
@@ -42,7 +42,7 @@ class TestClient(asynctest.TestCase):
         )
 
         result = await client.get("t16.txt")
-        protocol.write.assert_called_once_with("get t16.txt")
+        protocol.write.assert_called_once_with(b"get t16.txt")
 
         assert result == '40'
 
@@ -53,6 +53,6 @@ class TestClient(asynctest.TestCase):
         protocol.read = asynctest.CoroutineMock(side_effect=[b"\01", b""])
 
         result = await client.set("sleep", 1)
-        protocol.write.assert_called_once_with("sleep=1")
+        protocol.write.assert_called_once_with(b"sleep=1")
 
         assert result == True

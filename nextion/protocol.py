@@ -79,15 +79,14 @@ class NextionProtocol(asyncio.Protocol):
             else:
                 self.queue.put_nowait(message)
 
-    def read_no_wait(self):
+    def read_no_wait(self) -> bytes:
         return self.queue.get_nowait()
 
-    async def read(self):
+    async def read(self) -> bytes:
         return await self.queue.get()
 
-    def write(self, data, eol=True):
-        if isinstance(data, str):
-            data = data.encode()
+    def write(self, data: bytes, eol=True):
+        assert isinstance(data, bytes)
         self.transport.write(data + self.EOL if eol else b"")
         logger.debug("sent: %s", data)
 

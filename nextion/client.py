@@ -29,6 +29,7 @@ class Nextion:
         event_handler: typing.Callable[[EventType, any], None] = None,
         loop=asyncio.get_event_loop(),
         reconnect_attempts: int = 3,
+        encoding: str = 'ascii'
     ):
         self._loop = loop
 
@@ -40,6 +41,7 @@ class Nextion:
             lambda t, d: logger.info("Event %s data: %s" % (t, str(d)))
         )
         self._reconnect_attempts = reconnect_attempts
+        self._encoding = encoding
 
         self._sleeping = True
         self.sets_todo = {}
@@ -109,13 +111,13 @@ class Nextion:
 
         await self._connection.wait_connection()
 
-        self._connection.write("DRAKJHSUYDGBNCJHGJKSHBDN")  # exit active Protocol Reparse and return to passive mode
+        self._connection.write(b"DRAKJHSUYDGBNCJHGJKSHBDN")  # exit active Protocol Reparse and return to passive mode
 
         await asyncio.sleep(delay_between_connect_attempts)  # (1000000/baud rate)+30ms
 
         for connect_message in [
-            "connect",  # traditional connect instruction
-            "\xff\xffconnect"  # connect instruction using the broadcast address of 65535
+            b"connect",  # traditional connect instruction
+            b"\xff\xffconnect"  # connect instruction using the broadcast address of 65535
         ]:
             self._connection.write(connect_message)
             try:
@@ -180,7 +182,10 @@ class Nextion:
         await self._connection.close()
         await self.connect()
 
-    async def _read(self, timeout=IO_TIMEOUT):
+    async def disconnect(self) -> None:
+        await self._connection.close()
+
+    async def _read(self, timeout=IO_TIMEOUT) -> bytes:
         return await asyncio.wait_for(self._connection.read(), timeout=timeout)
 
     async def get(self, key, timeout=IO_TIMEOUT):
@@ -207,7 +212,7 @@ class Nextion:
         else:
             return await self.command("%s=%s" % (key, out_value), timeout=timeout)
 
-    async def _command(self, command, timeout=IO_TIMEOUT, attempts=None):
+    async def _command(self, command: str, timeout=IO_TIMEOUT, attempts=None):
         assert attempts is None or attempts > 0
 
         attempts_remained = attempts or self._reconnect_attempts
@@ -232,7 +237,7 @@ class Nextion:
             except asyncio.QueueEmpty:
                 pass
 
-            self._connection.write(command)
+            self._connection.write(command if isinstance(command, typing.ByteString) else command.encode(self._encoding))
 
             result = None
             data = None
@@ -265,7 +270,7 @@ class Nextion:
                     if type_ == ResponseType.PAGE:  # Page ID
                         data = raw[1]
                     elif type_ == ResponseType.STRING:  # string
-                        data = raw.decode()
+                        data = raw.decode(self._encoding)
                     elif type_ == ResponseType.NUMBER:  # number
                         data = struct.unpack("i", raw)[0]
                     else:
@@ -278,7 +283,7 @@ class Nextion:
         if last_exception is not None:
             raise last_exception
 
-    async def command(self, command, timeout=IO_TIMEOUT, attempts=None):
+    async def command(self, command: str, timeout=IO_TIMEOUT, attempts=None):
         async with self._command_lock:
             return await self._command(command, timeout=timeout, attempts=attempts)
 
@@ -314,7 +319,7 @@ class Nextion:
 
         self._connection.start_upload()
         try:
-            self._connection.write("whmi-wri %d,%d,0" % (file_size, self._baudrate))
+            self._connection.write(b"whmi-wri %d,%d,0" % (file_size, self._baudrate))
             res = await self._read(timeout=1)
             if res != b"\x05":
                 raise IOError(
