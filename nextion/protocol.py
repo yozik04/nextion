@@ -23,72 +23,7 @@ class ResponseType(IntEnum):
     PAGE = 0x66
 
 
-class NextionProtocol(asyncio.Protocol):
-    EOL = b"\xff\xff\xff"
-
-    def __init__(self, event_message_handler: typing.Callable):
-        self.transport = None
-        self.buffer = b""
-        self.queue = asyncio.Queue()
-        self.connect_future = asyncio.get_event_loop().create_future()
-        self.disconnect_future = asyncio.get_event_loop().create_future()
-        self.event_message_handler = event_message_handler
-
-    async def close(self):
-        if self.transport:
-            self.transport.close()
-
-        await self.disconnect_future
-
-    async def wait_connection(self):
-        await self.connect_future
-
-    def connection_made(self, transport):
-        self.transport = transport
-        logger.info("Connected to serial")
-        self.connect_future.set_result(True)
-
-    def is_event(self, message):
-        return len(message) > 0 and message[0] in EventType.__members__.values()
-
-    def data_received(self, data):
-        self.buffer += data
-
-        while True:
-            message, eol, leftover = self.buffer.partition(self.EOL)
-
-            if eol == b"":  # EOL not found
-                break
-
-            logger.debug("received: %s", binascii.hexlify(message))
-            self.buffer = leftover
-
-            if self.is_event(message):
-                self.event_message_handler(message)
-            else:
-                self.queue.put_nowait(message)
-
-    def read_no_wait(self) -> bytes:
-        return self.queue.get_nowait()
-
-    async def read(self) -> bytes:
-        return await self.queue.get()
-
-    def write(self, data: bytes, eol=True):
-        assert isinstance(data, bytes)
-        self.transport.write(data + self.EOL if eol else b"")
-        logger.debug("sent: %s", data)
-
-    def connection_lost(self, exc):
-        logger.error("Connection lost")
-        if not self.connect_future.done():
-            self.connect_future.set_result(False)
-        # self.connect_future = asyncio.get_event_loop().create_future()
-        if not self.disconnect_future.done():
-            self.disconnect_future.set_result(True)
-
-
-class NextionUploadProtocol(asyncio.Protocol):
+class BasicProtocol(asyncio.Protocol):
     def __init__(self):
         self.transport = None
         self.queue = asyncio.Queue()
@@ -130,3 +65,37 @@ class NextionUploadProtocol(asyncio.Protocol):
         # self.connect_future = asyncio.get_event_loop().create_future()
         if not self.disconnect_future.done():
             self.disconnect_future.set_result(True)
+
+
+class NextionProtocol(BasicProtocol):
+    EOL = b"\xff\xff\xff"
+
+    def __init__(self, event_message_handler: typing.Callable):
+        super(NextionProtocol, self).__init__()
+        self.buffer = b""
+        self.event_message_handler = event_message_handler
+
+    def is_event(self, message):
+        return len(message) > 0 and message[0] in EventType.__members__.values()
+
+    def data_received(self, data):
+        self.buffer += data
+
+        while True:
+            message, eol, leftover = self.buffer.partition(self.EOL)
+
+            if eol == b"":  # EOL not found
+                break
+
+            logger.debug("received: %s", binascii.hexlify(message))
+            self.buffer = leftover
+
+            if self.is_event(message):
+                self.event_message_handler(message)
+            else:
+                self.queue.put_nowait(message)
+
+    def write(self, data: bytes, eol=True):
+        assert isinstance(data, bytes)
+        self.transport.write(data + self.EOL if eol else b"")
+        logger.debug("sent: %s", data)

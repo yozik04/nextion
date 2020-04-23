@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import logging
 
-from nextion.client import Nextion, BAUDRATES
+from nextion.client import BAUDRATES, Nextion
 
 
 async def upload(args):
@@ -18,9 +18,20 @@ async def upload(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("device", help="device serial port")
-    parser.add_argument("-b", "--baud", type=int, default=None, help="baud rate", choices=BAUDRATES)
-    parser.add_argument("-ub", "--upload_baud", type=int, default=115200, help="upload baud rate", choices=BAUDRATES)
-    parser.add_argument("file", type=argparse.FileType('br'), help="firmware file *.tft")
+    parser.add_argument(
+        "-b", "--baud", type=int, default=None, help="baud rate", choices=BAUDRATES
+    )
+    parser.add_argument(
+        "-ub",
+        "--upload_baud",
+        type=int,
+        default=115200,
+        help="upload baud rate",
+        choices=BAUDRATES,
+    )
+    parser.add_argument(
+        "file", type=argparse.FileType("br"), help="firmware file *.tft"
+    )
 
     logging.basicConfig(
         level=logging.DEBUG,

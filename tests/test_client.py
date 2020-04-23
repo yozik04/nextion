@@ -44,7 +44,7 @@ class TestClient(asynctest.TestCase):
         result = await client.get("t16.txt")
         protocol.write.assert_called_once_with(b"get t16.txt")
 
-        assert result == '40'
+        assert result == "40"
 
     @with_client
     async def test_set(self, client, protocol):

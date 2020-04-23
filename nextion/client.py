@@ -6,12 +6,11 @@ import struct
 import typing
 from collections import namedtuple
 from io import BufferedReader
-from pathlib import Path
 
 import serial_asyncio
 
 from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
-from .protocol import EventType, NextionProtocol, ResponseType, NextionUploadProtocol
+from .protocol import BasicProtocol, EventType, NextionProtocol, ResponseType
 
 IO_TIMEOUT = 0.5  # Background picture change takes 180ms + first variable set after a wakeup takes 240ms + some buffer.
 BAUDRATES = [2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400]
@@ -31,7 +30,7 @@ class Nextion:
         event_handler: typing.Callable[[EventType, any], None] = None,
         loop=asyncio.get_event_loop(),
         reconnect_attempts: int = 3,
-        encoding: str = 'ascii'
+        encoding: str = "ascii",
     ):
         self._loop = loop
 
@@ -104,18 +103,20 @@ class Nextion:
             )
         except OSError as e:
             if e.errno == 2:
-                raise ConnectionFailed(
-                    "Failed to open serial connection: %s" % e
-                )
+                raise ConnectionFailed("Failed to open serial connection: %s" % e)
             else:
                 logger.warning("Baud %s not supported: %s", baud, e)
                 return False
 
         await self._connection.wait_connection()
 
-        self._connection.write(b"DRAKJHSUYDGBNCJHGJKSHBDN")  # exit active Protocol Reparse and return to passive mode
+        self._connection.write(
+            b"DRAKJHSUYDGBNCJHGJKSHBDN"
+        )  # exit active Protocol Reparse and return to passive mode
         try:
-            await self._read(timeout=delay_between_connect_attempts)  # We do not care what response will be here
+            await self._read(
+                timeout=delay_between_connect_attempts
+            )  # We do not care what response will be here
         except asyncio.TimeoutError:
             pass
 
@@ -123,7 +124,7 @@ class Nextion:
 
         for connect_message in [
             b"connect",  # traditional connect instruction
-            b"\xff\xffconnect"  # connect instruction using the broadcast address of 65535
+            b"\xff\xffconnect",  # connect instruction using the broadcast address of 65535
         ]:
             self._connection.write(connect_message)
             try:
@@ -131,15 +132,11 @@ class Nextion:
                 if result[:6] == b"comok ":
                     return result
                 else:
-                    logger.warning(
-                        "Wrong reply %s to connect attempt", result
-                    )
+                    logger.warning("Wrong reply %s to connect attempt", result)
             except asyncio.TimeoutError:
                 pass  # Attempt a next method
 
-        logger.warning(
-            "No valid reply on %d baud. Closing connection", baud
-        )
+        logger.warning("No valid reply on %d baud. Closing connection", baud)
         await self._connection.close()
         return False
 
@@ -251,7 +248,11 @@ class Nextion:
             except asyncio.QueueEmpty:
                 pass
 
-            self._connection.write(command if isinstance(command, typing.ByteString) else command.encode(self._encoding))
+            self._connection.write(
+                command
+                if isinstance(command, typing.ByteString)
+                else command.encode(self._encoding)
+            )
 
             result = None
             data = None
@@ -317,8 +318,8 @@ class Nextion:
         assert 0 <= val <= 100
         await self.set("dim", val)
 
-    def _make_upload_protocol(self) -> NextionUploadProtocol:
-        return NextionUploadProtocol()
+    def _make_upload_protocol(self) -> BasicProtocol:
+        return BasicProtocol()
 
     async def upload_firmware(self, file: BufferedReader, upload_baud=None):
         upload_baud = upload_baud or self._baudrate
@@ -345,7 +346,7 @@ class Nextion:
                 "Wrong response to upload command: %s" % binascii.hexlify(res)
             )
 
-        logger.info('Device is ready to accept upload')
+        logger.info("Device is ready to accept upload")
 
         uploaded_bytes = 0
         chunk_size = 4096
@@ -359,11 +360,10 @@ class Nextion:
             res = await self._read(timeout=timeout)
             if res != b"\x05":
                 raise IOError(
-                    "Wrong response while uploading chunk: %s"
-                    % binascii.hexlify(res)
-                    )
+                    "Wrong response while uploading chunk: %s" % binascii.hexlify(res)
+                )
 
             uploaded_bytes += len(buf)
-            logger.info('Uploaded: %.1f%%', uploaded_bytes / file_size * 100)
+            logger.info("Uploaded: %.1f%%", uploaded_bytes / file_size * 100)
 
-        logger.info('Successfully uploaded %d bytes' % uploaded_bytes)
+        logger.info("Successfully uploaded %d bytes" % uploaded_bytes)
