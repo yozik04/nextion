@@ -57,6 +57,7 @@ class BasicProtocol(asyncio.Protocol):
     def write(self, data: bytes, eol=True):
         assert isinstance(data, bytes)
         self.transport.write(data)
+        logger.debug("sent: %d bytes", len(data))
 
     def connection_lost(self, exc):
         logger.error("Connection lost")

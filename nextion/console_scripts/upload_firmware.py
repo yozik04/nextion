@@ -30,15 +30,18 @@ def main():
         choices=BAUDRATES,
     )
     parser.add_argument(
+        "-v", "--verbose", action="store_true", help="output debug messages"
+    )
+    parser.add_argument(
         "file", type=argparse.FileType("br"), help="firmware file *.tft"
     )
 
+    args = parser.parse_args()
+
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)-8s %(name)-15s %(message)s",
     )
-
-    args = parser.parse_args()
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(upload(args))

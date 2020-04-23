@@ -86,6 +86,38 @@ Get current set encoding (Not fetched from the device)
 
 For some components in the Nextion Editor you need to check `Send Component ID` for required event.
 
+# Firmware uploading
+If you installed the library you should have `nextion-fw-upload` command in your PATH.
+```bash
+nextion-fw-upload -h
+```
+
+Otherwise use next command in the root of the project: 
+```bash
+python -m nextion.console_scripts.upload_firmware -h
+```
+
+Usage (check with option `-h`)
+```
+usage: nextion-fw-upload [-h]
+                         [-b {2400,4800,9600,19200,38400,57600,115200,230400}]
+                         [-ub {2400,4800,9600,19200,38400,57600,115200,230400}]
+                         [-v]
+                         device file
+
+positional arguments:
+  device                device serial port
+  file                  firmware file *.tft
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -b {2400,4800,9600,19200,38400,57600,115200,230400}, --baud {2400,4800,9600,19200,38400,57600,115200,230400}
+                        baud rate
+  -ub {2400,4800,9600,19200,38400,57600,115200,230400}, --upload_baud {2400,4800,9600,19200,38400,57600,115200,230400}
+                        upload baud rate
+  -v, --verbose         output debug messages
+```
+
 # Additional resources:
 - https://www.itead.cc/wiki/Nextion_Instruction_Set
 - [PyPI](https://pypi.org/project/nextion/)
