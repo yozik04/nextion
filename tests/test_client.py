@@ -12,7 +12,7 @@ class TestClient(asynctest.TestCase):
         )
 
         protocol.read = asynctest.CoroutineMock(
-            side_effect=[connect_return, b"", b"\01", b""]
+            side_effect=[b"1a", connect_return, b"", b"\01", b""]
         )
         await client.connect()
 
