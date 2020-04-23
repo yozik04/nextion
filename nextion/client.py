@@ -112,6 +112,10 @@ class Nextion:
         await self._connection.wait_connection()
 
         self._connection.write(b"DRAKJHSUYDGBNCJHGJKSHBDN")  # exit active Protocol Reparse and return to passive mode
+        try:
+            await self._read(timeout=delay_between_connect_attempts)  # We do not care what response will be here
+        except asyncio.TimeoutError:
+            pass
 
         await asyncio.sleep(delay_between_connect_attempts)  # (1000000/baud rate)+30ms
 
@@ -121,15 +125,15 @@ class Nextion:
         ]:
             self._connection.write(connect_message)
             try:
-                result = await self._read()
+                result = await self._read(timeout=delay_between_connect_attempts)
                 if result[:6] == b"comok ":
                     return result
                 else:
                     logger.warning(
                         "Wrong reply %s to connect attempt", result
                     )
-            except asyncio.TimeoutError as e:
-                await asyncio.sleep(delay_between_connect_attempts)  # (1000000/baud rate)+30ms
+            except asyncio.TimeoutError:
+                pass  # Attempt a next method
 
         logger.warning(
             "No valid reply on %d baud. Closing connection", baud
