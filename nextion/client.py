@@ -1,15 +1,17 @@
 import asyncio
 import binascii
 import logging
+import os
 import struct
 import typing
 from collections import namedtuple
+from io import BufferedReader
 from pathlib import Path
 
 import serial_asyncio
 
 from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
-from .protocol import EventType, NextionProtocol, ResponseType
+from .protocol import EventType, NextionProtocol, ResponseType, NextionUploadProtocol
 
 IO_TIMEOUT = 0.5  # Background picture change takes 180ms + first variable set after a wakeup takes 240ms + some buffer.
 BAUDRATES = [2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400]
@@ -174,7 +176,7 @@ class Nextion:
             logger.info("Detected model: %s", data[2])
             logger.info("Firmware version: %s", data[3])
             logger.info("Serial number: %s", data[5])
-            logger.debug("Flash size: %s", data[6])
+            logger.info("Flash size: %s", data[6])
 
             try:
                 await self._command("bkcmd=3", attempts=1)
@@ -315,43 +317,53 @@ class Nextion:
         assert 0 <= val <= 100
         await self.set("dim", val)
 
-    async def upload_firmware(self, file):
-        p = Path(file)
-        if not p.exists():
-            raise IOError("File %s does not exist" % file)
-        if not p.is_file():
-            raise IOError("File %s is not a regular file")
-        file_size = p.stat().st_size
+    def _make_upload_protocol(self) -> NextionUploadProtocol:
+        return NextionUploadProtocol()
 
-        logger.info("About to upload %s(%d bytes)" % (file, file_size))
+    async def upload_firmware(self, file: BufferedReader, upload_baud=None):
+        upload_baud = upload_baud or self._baudrate
+        assert upload_baud in BAUDRATES
+
+        file_size = os.fstat(file.fileno()).st_size
+
+        logger.info("About to upload %d bytes" % (file_size))
         await self.set("sleep", 0)
         await asyncio.sleep(0.15)
         await self.set("usup", 1)
         await self.set("ussp", 0)
 
-        self._connection.start_upload()
-        try:
-            self._connection.write(b"whmi-wri %d,%d,0" % (file_size, self._baudrate))
-            res = await self._read(timeout=1)
+        self._connection.write(b"whmi-wri %d,%d,0" % (file_size, upload_baud))
+        logger.info("Reconnecting at new baud rate: %d" % (upload_baud))
+        await self._connection.close()
+        _, self._connection = await serial_asyncio.create_serial_connection(
+            self._loop, self._make_upload_protocol, url=self._url, baudrate=upload_baud
+        )
+
+        res = await self._read(timeout=1)
+        if res != b"\x05":
+            raise IOError(
+                "Wrong response to upload command: %s" % binascii.hexlify(res)
+            )
+
+        logger.info('Device is ready to accept upload')
+
+        uploaded_bytes = 0
+        chunk_size = 4096
+        while True:
+            buf = file.read(chunk_size)
+            if not buf:
+                break
+            self._connection.write(buf, eol=False)
+
+            timeout = len(buf) * 12 / self._baudrate + 1
+            res = await self._read(timeout=timeout)
             if res != b"\x05":
                 raise IOError(
-                    "Wrong response to upload command: %s" % binascii.hexlify(res)
-                )
+                    "Wrong response while uploading chunk: %s"
+                    % binascii.hexlify(res)
+                    )
 
-            with open(file, "rb") as fh:
-                while True:
-                    buf = fh.read(4096)
-                    if not buf:
-                        break
-                    self._connection.write(buf, eol=False)
+            uploaded_bytes += len(buf)
+            logger.info('Uploaded: %.1f%%', uploaded_bytes / file_size * 100)
 
-                    timeout = len(buf) * 12 / self._baudrate + 1
-                    res = await self._read(timeout=timeout)
-                    if res != b"\x05":
-                        raise IOError(
-                            "Wrong response while uploading chunk: %s"
-                            % binascii.hexlify(res)
-                        )
-
-        finally:
-            self._connection.stop_upload()
+        logger.info('Successfully uploaded %d bytes' % uploaded_bytes)

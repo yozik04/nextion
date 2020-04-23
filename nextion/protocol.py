@@ -33,13 +33,6 @@ class NextionProtocol(asyncio.Protocol):
         self.connect_future = asyncio.get_event_loop().create_future()
         self.disconnect_future = asyncio.get_event_loop().create_future()
         self.event_message_handler = event_message_handler
-        self._upload_mode = False
-
-    def start_upload(self):
-        self._upload_mode = True
-
-    def stop_upload(self):
-        self._upload_mode = False
 
     async def close(self):
         if self.transport:
@@ -63,10 +56,6 @@ class NextionProtocol(asyncio.Protocol):
 
         while True:
             message, eol, leftover = self.buffer.partition(self.EOL)
-            if self._upload_mode:
-                self.buffer = leftover
-                logger.debug("received in upload mode: %s", binascii.hexlify(message))
-                self.queue.put_nowait(message)
 
             if eol == b"":  # EOL not found
                 break
@@ -89,6 +78,50 @@ class NextionProtocol(asyncio.Protocol):
         assert isinstance(data, bytes)
         self.transport.write(data + self.EOL if eol else b"")
         logger.debug("sent: %s", data)
+
+    def connection_lost(self, exc):
+        logger.error("Connection lost")
+        if not self.connect_future.done():
+            self.connect_future.set_result(False)
+        # self.connect_future = asyncio.get_event_loop().create_future()
+        if not self.disconnect_future.done():
+            self.disconnect_future.set_result(True)
+
+
+class NextionUploadProtocol(asyncio.Protocol):
+    def __init__(self):
+        self.transport = None
+        self.queue = asyncio.Queue()
+        self.connect_future = asyncio.get_event_loop().create_future()
+        self.disconnect_future = asyncio.get_event_loop().create_future()
+
+    async def close(self):
+        if self.transport:
+            self.transport.close()
+
+        await self.disconnect_future
+
+    async def wait_connection(self):
+        await self.connect_future
+
+    def connection_made(self, transport):
+        self.transport = transport
+        logger.info("Connected to serial")
+        self.connect_future.set_result(True)
+
+    def data_received(self, data):
+        logger.debug("received: %s", binascii.hexlify(data))
+        self.queue.put_nowait(data)
+
+    def read_no_wait(self) -> bytes:
+        return self.queue.get_nowait()
+
+    async def read(self) -> bytes:
+        return await self.queue.get()
+
+    def write(self, data: bytes, eol=True):
+        assert isinstance(data, bytes)
+        self.transport.write(data)
 
     def connection_lost(self, exc):
         logger.error("Connection lost")
