@@ -2,7 +2,8 @@ import argparse
 import asyncio
 import logging
 
-from nextion.client import BAUDRATES, Nextion
+from nextion.client import Nextion
+from nextion.constants import BAUDRATES
 
 
 async def upload(args):

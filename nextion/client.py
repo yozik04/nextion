@@ -9,12 +9,9 @@ from io import BufferedReader
 
 import serial_asyncio
 
+from .constants import IO_TIMEOUT, BAUDRATES
 from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
 from .protocol import BasicProtocol, EventType, NextionProtocol, ResponseType
-
-IO_TIMEOUT = 0.5  # Background picture change takes 180ms + first variable set after a wakeup takes 240ms + some buffer.
-BAUDRATES = [2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400]
-
 
 logger = logging.getLogger("nextion").getChild(__name__)
 
@@ -41,8 +38,8 @@ class Nextion:
         self.event_handler = event_handler or (
             lambda t, d: logger.info("Event %s data: %s" % (t, str(d)))
         )
-        self._reconnect_attempts = reconnect_attempts
-        self._encoding = encoding
+        self.reconnect_attempts = reconnect_attempts
+        self.encoding = encoding
 
         self._sleeping = True
         self.sets_todo = {}
@@ -98,9 +95,7 @@ class Nextion:
 
         logger.info("Connecting: %s, baud: %s", self._url, baud)
         try:
-            _, self._connection = await serial_asyncio.create_serial_connection(
-                self._loop, self._make_protocol, url=self._url, baudrate=baud
-            )
+            await self._create_serial_connection(baud)
         except OSError as e:
             if e.errno == 2:
                 raise ConnectionFailed("Failed to open serial connection: %s" % e)
@@ -110,11 +105,11 @@ class Nextion:
 
         await self._connection.wait_connection()
 
-        self._connection.write(
-            b"DRAKJHSUYDGBNCJHGJKSHBDN"
+        self.write_command(
+            "DRAKJHSUYDGBNCJHGJKSHBDN"
         )  # exit active Protocol Reparse and return to passive mode
         try:
-            await self._read(
+            await self.read_packet(
                 timeout=delay_between_connect_attempts
             )  # We do not care what response will be here
         except asyncio.TimeoutError:
@@ -122,54 +117,44 @@ class Nextion:
 
         await asyncio.sleep(delay_between_connect_attempts)  # (1000000/baud rate)+30ms
 
+        result = await self._attempt_connect_messages(delay_between_connect_attempts)
+
+        if result:
+            return result
+        else:
+            logger.warning("No valid reply on %d baud. Closing connection", baud)
+            await self._connection.close()
+            return False
+
+    async def _attempt_connect_messages(self, delay_between_connect_attempts):
+        result = None
         for connect_message in [
             b"connect",  # traditional connect instruction
             b"\xff\xffconnect",  # connect instruction using the broadcast address of 65535
         ]:
-            self._connection.write(connect_message)
+            self.write_command(connect_message)
             try:
-                result = await self._read(timeout=delay_between_connect_attempts)
+                result = await self.read_packet(timeout=delay_between_connect_attempts)
                 if result[:6] == b"comok ":
-                    return result
+                    break
                 else:
                     logger.warning("Wrong reply %s to connect attempt", result)
             except asyncio.TimeoutError:
                 pass  # Attempt a next method
+        return result
 
-        logger.warning("No valid reply on %d baud. Closing connection", baud)
-        await self._connection.close()
-        return False
-
-    @property
-    def encoding(self):
-        return self._encoding
-
-    @encoding.setter
-    def encoding(self, encoding):
-        self._encoding = encoding
+    async def _create_serial_connection(self, baud):
+        _, self._connection = await serial_asyncio.create_serial_connection(
+            self._loop, self._make_protocol, url=self._url, baudrate=baud
+        )
 
     async def connect(self) -> None:
         try:
-            baudrates = BAUDRATES.copy()
-            if self._baudrate:  # if a baud rate specified put it first in array
-                try:
-                    baudrates.remove(self._baudrate)
-                except ValueError:
-                    pass
-                baudrates.insert(0, self._baudrate)
-
-            for baud in baudrates:
-                result = await self._connect_at_baud(baud)
-                if result:
-                    self._baudrate = baud
-                    break
-                else:
-                    logger.warning("Baud %d did not work", baud)
-            else:
-                raise ConnectionFailed("No baud rate suited")
+            result = await self._try_connect_on_different_baudrates()
 
             data = result[7:].decode().split(",")
-            logger.info("Address: %s", data[1])
+            logger.info("Address: %s", data[1])  # <unknown>-<address>, if address then all commands need to be
+            # prepended with address. See https://nextion.tech/2017/12/08/nextion-hmi-upload-protocol-v1-1/
             logger.info("Detected model: %s", data[2])
             logger.info("Firmware version: %s", data[3])
             logger.info("Serial number: %s", data[5])
@@ -189,6 +174,30 @@ class Nextion:
             logger.exception("Unexpected exception during connect")
             raise
 
+    async def _try_connect_on_different_baudrates(self):
+        baudrates = await self._get_priority_ordered_baudrates()
+
+        for baud in baudrates:
+            result = await self._connect_at_baud(baud)
+            if result:
+                self._baudrate = baud
+                break
+            else:
+                logger.warning("Baud %d did not work", baud)
+        else:
+            raise ConnectionFailed("No baud rate suited")
+        return result
+
+    async def _get_priority_ordered_baudrates(self):
+        baudrates = BAUDRATES.copy()
+        if self._baudrate:  # if a baud rate specified put it first in array
+            try:
+                baudrates.remove(self._baudrate)
+            except ValueError:
+                pass
+            baudrates.insert(0, self._baudrate)
+        return baudrates
+
     async def reconnect(self):
         await self._connection.close()
         await self.connect()
@@ -196,7 +205,7 @@ class Nextion:
     async def disconnect(self) -> None:
         await self._connection.close()
 
-    async def _read(self, timeout=IO_TIMEOUT) -> bytes:
+    async def read_packet(self, timeout=IO_TIMEOUT) -> bytes:
         return await asyncio.wait_for(self._connection.read(), timeout=timeout)
 
     async def get(self, key, timeout=IO_TIMEOUT):
@@ -226,7 +235,7 @@ class Nextion:
     async def _command(self, command: str, timeout=IO_TIMEOUT, attempts=None):
         assert attempts is None or attempts > 0
 
-        attempts_remained = attempts or self._reconnect_attempts
+        attempts_remained = attempts or self.reconnect_attempts
         last_exception = None
         while attempts_remained > 0:
             attempts_remained -= 1
@@ -240,19 +249,9 @@ class Nextion:
                     await asyncio.sleep(1)
                     continue
 
-            try:
-                while True:
-                    logger.debug(
-                        "Dropping dangling: %s", self._connection.read_no_wait()
-                    )
-            except asyncio.QueueEmpty:
-                pass
+            self.flush_read_buffer()
 
-            self._connection.write(
-                command
-                if isinstance(command, typing.ByteString)
-                else command.encode(self._encoding)
-            )
+            self.write_command(command)
 
             result = None
             data = None
@@ -260,7 +259,7 @@ class Nextion:
 
             while not finished:
                 try:
-                    response = await self._read(timeout=timeout)
+                    response = await self.read_packet(timeout=timeout)
                 except asyncio.TimeoutError as e:
                     logger.error('Command "%s" timeout.', command)
                     last_exception = CommandTimeout(
@@ -272,6 +271,8 @@ class Nextion:
                 res_len = len(response)
                 if res_len == 0:
                     finished = True
+                    if result is None:
+                        result = True
                 elif res_len == 1:  # is response code
                     response_code = response[0]
                     if response_code == 0x01:  # success
@@ -285,7 +286,7 @@ class Nextion:
                     if type_ == ResponseType.PAGE:  # Page ID
                         data = raw[1]
                     elif type_ == ResponseType.STRING:  # string
-                        data = raw.decode(self._encoding)
+                        data = raw.decode(self.encoding)
                     elif type_ == ResponseType.NUMBER:  # number
                         data = struct.unpack("i", raw)[0]
                     else:
@@ -297,6 +298,21 @@ class Nextion:
 
         if last_exception is not None:
             raise last_exception
+
+    def write_command(self, command):
+        if not isinstance(command, typing.ByteString):
+            command = command.encode(self.encoding)
+
+        self._connection.write(command)
+
+    def flush_read_buffer(self):
+        try:
+            while True:
+                logger.debug(
+                    "Flushing message: %s", self._connection.read_no_wait()
+                )
+        except asyncio.QueueEmpty:
+            pass
 
     async def command(self, command: str, timeout=IO_TIMEOUT, attempts=None):
         async with self._command_lock:
@@ -333,14 +349,14 @@ class Nextion:
         await self.set("usup", 1)
         await self.set("ussp", 0)
 
-        self._connection.write(b"whmi-wri %d,%d,0" % (file_size, upload_baud))
+        self.write_command("whmi-wri %d,%d,0" % (file_size, upload_baud))
         logger.info("Reconnecting at new baud rate: %d" % (upload_baud))
         await self._connection.close()
         _, self._connection = await serial_asyncio.create_serial_connection(
             self._loop, self._make_upload_protocol, url=self._url, baudrate=upload_baud
         )
 
-        res = await self._read(timeout=1)
+        res = await self.read_packet(timeout=1)
         if res != b"\x05":
             raise IOError(
                 "Wrong response to upload command: %s" % binascii.hexlify(res)
@@ -357,7 +373,7 @@ class Nextion:
             self._connection.write(buf, eol=False)
 
             timeout = len(buf) * 12 / self._baudrate + 1
-            res = await self._read(timeout=timeout)
+            res = await self.read_packet(timeout=timeout)
             if res != b"\x05":
                 raise IOError(
                     "Wrong response while uploading chunk: %s" % binascii.hexlify(res)
