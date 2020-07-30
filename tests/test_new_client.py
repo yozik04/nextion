@@ -12,7 +12,7 @@ logger = logging.getLogger("nextion").getChild(__name__)
 
 class DummyNextionProtocol_1_61_1(BasicProtocol):
     def write(self, data: bytes, eol=True):
-        logger.debug(f"sent: {data}")
+        logger.debug("sent: %s" % (data))
         if data == b"DRAKJHSUYDGBNCJHGJKSHBDN":
             self.data_received(b"\x1a")
         elif data == b"connect":
@@ -26,7 +26,7 @@ class DummyNextionProtocol_1_61_1(BasicProtocol):
         elif data == b"get sleep":
             self.data_received(b"\x71\x00\x00\x00\x00")
         else:
-            logger.error(f"write with no response(eol={eol}): {data}")
+            logger.error("write with no response(eol=%s): %s" % (eol, data))
 
 
 class TestClient(asynctest.TestCase):
