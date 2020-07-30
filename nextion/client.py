@@ -9,7 +9,7 @@ from io import BufferedReader
 
 import serial_asyncio
 
-from .constants import IO_TIMEOUT, BAUDRATES
+from .constants import BAUDRATES, IO_TIMEOUT
 from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
 from .protocol import BasicProtocol, EventType, NextionProtocol, ResponseType
 
@@ -153,7 +153,9 @@ class Nextion:
             result = await self._try_connect_on_different_baudrates()
 
             data = result[7:].decode().split(",")
-            logger.info("Address: %s", data[1])  # <unknown>-<address>, if address then all commands need to be
+            logger.info(
+                "Address: %s", data[1]
+            )  # <unknown>-<address>, if address then all commands need to be
             # prepended with address. See https://nextion.tech/2017/12/08/nextion-hmi-upload-protocol-v1-1/
             logger.info("Detected model: %s", data[2])
             logger.info("Firmware version: %s", data[3])
@@ -176,10 +178,10 @@ class Nextion:
             raise
 
     async def _update_sleep_status(self):
-        self._sleeping = await self._command("get sleep")
+        self._sleeping = bool(await self._command("get sleep"))
 
     async def _try_connect_on_different_baudrates(self):
-        baudrates = await self._get_priority_ordered_baudrates()
+        baudrates = self._get_priority_ordered_baudrates()
 
         for baud in baudrates:
             result = await self._connect_at_baud(baud)
@@ -192,7 +194,7 @@ class Nextion:
             raise ConnectionFailed("No baud rate suited")
         return result
 
-    async def _get_priority_ordered_baudrates(self):
+    def _get_priority_ordered_baudrates(self):
         baudrates = BAUDRATES.copy()
         if self._baudrate:  # if a baud rate specified put it first in array
             try:
@@ -297,6 +299,8 @@ class Nextion:
                         logger.error(
                             "Unknown data received: %s" % binascii.hexlify(response)
                         )
+                    if command.partition(" ")[0] in ["get", "sendme"]:
+                        finished = True
             else:  # this will run if loop ended successfully
                 return data if data is not None else result
 
@@ -312,15 +316,16 @@ class Nextion:
     def flush_read_buffer(self):
         try:
             while True:
-                logger.debug(
-                    "Flushing message: %s", self._connection.read_no_wait()
-                )
+                logger.debug("Flushing message: %s", self._connection.read_no_wait())
         except asyncio.QueueEmpty:
             pass
 
     async def command(self, command: str, timeout=IO_TIMEOUT, attempts=None):
         async with self._command_lock:
             return await self._command(command, timeout=timeout, attempts=attempts)
+
+    def is_sleeping(self):
+        return self._sleeping
 
     async def sleep(self):
         if self._sleeping:
