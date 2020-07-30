@@ -44,6 +44,9 @@ class Nextion:
         self._sleeping = True
         self.sets_todo = {}
 
+    async def on_startup(self):
+        await self.command("bkcmd=3")  # Let's ensure we receive expected responses
+
     async def on_wakeup(self):
         logger.debug('Updating variables after wakeup: "%s"', str(self.sets_todo))
         for k, v in self.sets_todo.items():
@@ -77,6 +80,7 @@ class Nextion:
             self._loop.create_task(self.on_wakeup())
             self.event_handler(EventType(typ), None)
         elif typ == EventType.STARTUP:  # System successful start up
+            self._loop.create_task(self.on_startup())
             self.event_handler(EventType(typ), None)
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
             self.event_handler(EventType(typ), None)
@@ -155,6 +159,11 @@ class Nextion:
             logger.info("Firmware version: %s", data[3])
             logger.info("Serial number: %s", data[5])
             logger.info("Flash size: %s", data[6])
+
+            try:
+                await self._command("bkcmd=3", attempts=1)
+            except CommandTimeout as e:
+                pass  # it is fine
 
             await self._update_sleep_status()
 
