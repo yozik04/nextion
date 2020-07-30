@@ -44,9 +44,6 @@ class Nextion:
         self._sleeping = True
         self.sets_todo = {}
 
-    async def on_startup(self):
-        await self.command("bkcmd=3")  # Let's ensure we receive expected responses
-
     async def on_wakeup(self):
         logger.debug('Updating variables after wakeup: "%s"', str(self.sets_todo))
         for k, v in self.sets_todo.items():
@@ -80,7 +77,6 @@ class Nextion:
             self._loop.create_task(self.on_wakeup())
             self.event_handler(EventType(typ), None)
         elif typ == EventType.STARTUP:  # System successful start up
-            self._loop.create_task(self.on_startup())
             self.event_handler(EventType(typ), None)
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
             self.event_handler(EventType(typ), None)
@@ -160,11 +156,7 @@ class Nextion:
             logger.info("Serial number: %s", data[5])
             logger.info("Flash size: %s", data[6])
 
-            try:
-                await self._command("bkcmd=3", attempts=1)
-            except CommandTimeout as e:
-                pass  # it is fine
-            self._sleeping = await self._command("get sleep")
+            await self._update_sleep_status()
 
             logger.info("Successfully connected to the device")
         except ConnectionFailed:
@@ -173,6 +165,9 @@ class Nextion:
         except:
             logger.exception("Unexpected exception during connect")
             raise
+
+    async def _update_sleep_status(self):
+        self._sleeping = await self._command("get sleep")
 
     async def _try_connect_on_different_baudrates(self):
         baudrates = await self._get_priority_ordered_baudrates()
