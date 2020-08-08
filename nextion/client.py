@@ -355,8 +355,11 @@ class Nextion:
         logger.info("About to upload %d bytes" % (file_size))
         await self.set("sleep", 0)
         await asyncio.sleep(0.15)
-        await self.set("usup", 1)
-        await self.set("ussp", 0)
+        try:
+            await self.set("usup", 1)
+            await self.set("ussp", 0)
+        except CommandFailed as e:
+            logger.warning("Additional sleep configuration failed: %s" % str(e))
 
         self.write_command("whmi-wri %d,%d,0" % (file_size, upload_baud))
         logger.info("Reconnecting at new baud rate: %d" % (upload_baud))
