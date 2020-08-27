@@ -16,6 +16,8 @@ from nextion import Nextion, EventType
 def event_handler(type_, data):
     if type_ == EventType.STARTUP:
         print('We have booted up!')
+    elif type_ == EventType.TOUCH:
+        print('A button (id: %d) was touched on page %d' % (data.component_id, data.page_id))
 
     logging.info('Event %s data: %s', type, str(data))
 
