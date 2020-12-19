@@ -71,7 +71,7 @@ class NextionProtocol(BasicProtocol):
 
     def _reset_dropped_buffer(self):
         if len(self.dropped_buffer):
-            logger.warning(f"Junk received. Dropped bytes %s", binascii.hexlify(self.dropped_buffer))
+            logger.warning("Junk received. Dropped bytes %s", binascii.hexlify(self.dropped_buffer))
             self.dropped_buffer = b""
 
     def _extract_packet(self):
