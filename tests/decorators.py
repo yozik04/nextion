@@ -15,6 +15,7 @@ def with_client(func):
         protocol_mock.read = asynctest.create_autospec(asyncio.Queue)
         protocol_mock.read_no_wait = asynctest.mock.Mock(side_effect=asyncio.QueueEmpty)
         create_serial_connection.return_value = None, protocol_mock
+        client._connection = protocol_mock
         await func(cls, client, protocol_mock)
 
     return wrapper

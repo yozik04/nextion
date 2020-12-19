@@ -1,34 +1,60 @@
 import logging
+import typing
 from unittest import TestCase
 from unittest.mock import MagicMock
 
 from nextion.protocol import NextionProtocol
 
-logging.basicConfig(level=logging.DEBUG)
-
 
 class TestClient(TestCase):
-    def test_data_received(self):
+    def assertPacketsParsed(self, input_chunks: typing.List[bytes], expected_packets: typing.List[bytes]):
         obj = NextionProtocol(MagicMock())
 
-        obj.data_received(b"p12\xff\xff\xff\x01\xff\xff\xff\xff\xff\xff")
+        for chunk in input_chunks:
+            obj.data_received(chunk)
 
-        self.assertEqual(3, obj.queue.qsize())
+        self.assertEqual(len(expected_packets), obj.queue.qsize())
 
-        self.assertEqual(b"p12", obj.read_no_wait())
-        self.assertEqual(b"\x01", obj.read_no_wait())
-        self.assertEqual(b"", obj.read_no_wait())
+        for expected_packet in expected_packets:
+            self.assertEqual(expected_packet, obj.read_no_wait())
 
-    def test_data_received_chunked(self):
-        obj = NextionProtocol(MagicMock())
+    def test_one_chunk_data_received(self):
+        self.assertPacketsParsed(
+            [b"\x70\x31\x32\xff\xff\xff\x01\xff\xff\xff\xff\xff\xff"],
+            [b"\x70\x31\x32", b"\x01", b""]
+        )
 
-        obj.data_received(b"p12\xff\xff")
-        obj.data_received(b"\xff\x01\xff")
-        obj.data_received(b"\xff\xff")
-        obj.data_received(b"\xff\xff\xff")
+    def test_chunked_data_received(self):
+        self.assertPacketsParsed(
+            [
+                b"\x70\x31\x32\xff\xff",
+                b"\xff\x01\xff",
+                b"\xff\xff",
+                b"\xff\xff\xff"
+            ],
+            [b"\x70\x31\x32", b"\x01", b""]
+        )
 
-        self.assertEqual(3, obj.queue.qsize())
+    def test_negative_integer_data_received(self):
+        self.assertPacketsParsed(
+            [b"\x71\xa5\xff\xff\xff\xff\xff\xff\x01\xff\xff\xff\xff\xff\xff"],
+            [b"\x71\xa5\xff\xff\xff", b"\x01", b""]
+        )
 
-        self.assertEqual(b"p12", obj.read_no_wait())
-        self.assertEqual(b"\x01", obj.read_no_wait())
-        self.assertEqual(b"", obj.read_no_wait())
+    def test_negative_integer_chunked_data_received(self):
+        self.assertPacketsParsed(
+            [
+                b"\x71\xa5\xff",
+                b"\xff\xff\xff",
+                b"\xff\xff\x01",
+                b"\xff\xff",
+                b"\xff\xff\xff\xff"
+            ],
+            [b"\x71\xa5\xff\xff\xff", b"\x01", b""]
+        )
+
+    def test_junk_data_received(self):
+        self.assertPacketsParsed(
+            [b"\x71\xff\xff\xff\x71\xa5\xff\xff\xff\xff\xff\xff"],
+            [b"\x71\xa5\xff\xff\xff"]
+        )
