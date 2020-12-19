@@ -48,5 +48,3 @@ class BasicProtocol(asyncio.Protocol):
         # self.connect_future = asyncio.get_event_loop().create_future()
         if not self.disconnect_future.done():
             self.disconnect_future.set_result(True)
-
-

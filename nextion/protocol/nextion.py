@@ -28,19 +28,19 @@ class NextionProtocol(BasicProtocol):
     EOL = b"\xff\xff\xff"
 
     PACKET_LENGTH_MAP = {
-        0x00: 6, # Nextion Startup
-        0x24: 4, # Serial Buffer Overflow
-        0x65: 7, # Touch Event
-        0x66: 5, # Current Page Number
-        0x67: 9, # Touch Coordinate(awake)
-        0x68: 9, # Touch Coordinate(sleep)
-        0x71: 8, # Numeric Data Enclosed
-        0x86: 4, # Auto Entered Sleep Mode
-        0x87: 4, # Auto Wake from Sleep
-        0x88: 4, # Nextion Ready
-        0x89: 4, # Start microSD Upgrade
-        0xFD: 4, # Transparent Data Finished
-        0xFE: 4, # Transparent Data Ready
+        0x00: 6,  # Nextion Startup
+        0x24: 4,  # Serial Buffer Overflow
+        0x65: 7,  # Touch Event
+        0x66: 5,  # Current Page Number
+        0x67: 9,  # Touch Coordinate(awake)
+        0x68: 9,  # Touch Coordinate(sleep)
+        0x71: 8,  # Numeric Data Enclosed
+        0x86: 4,  # Auto Entered Sleep Mode
+        0x87: 4,  # Auto Wake from Sleep
+        0x88: 4,  # Nextion Ready
+        0x89: 4,  # Start microSD Upgrade
+        0xFD: 4,  # Transparent Data Finished
+        0xFE: 4,  # Transparent Data Ready
     }
 
     def __init__(self, event_message_handler: typing.Callable):
@@ -71,7 +71,9 @@ class NextionProtocol(BasicProtocol):
 
     def _reset_dropped_buffer(self):
         if len(self.dropped_buffer):
-            logger.warning("Junk received. Dropped bytes %s", binascii.hexlify(self.dropped_buffer))
+            logger.warning(
+                "Junk received. Dropped bytes %s", binascii.hexlify(self.dropped_buffer)
+            )
             self.dropped_buffer = b""
 
     def _extract_packet(self):
@@ -102,7 +104,7 @@ class NextionProtocol(BasicProtocol):
 
     def _extract_varied_length_packet(self):
         message, eol, leftover = self.buffer.partition(self.EOL)
-        if eol == b'':
+        if eol == b"":
             return None
 
         self.buffer = leftover
