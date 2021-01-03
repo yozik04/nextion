@@ -3,7 +3,7 @@ Lightweight Python 3.5+ async library to control Nextion displays.
 
 ## Installation
 ### Pypi
-`pip install nextion`
+`pip3 install nextion`
 
 ## Simple usage:
 ```python
