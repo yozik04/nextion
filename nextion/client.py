@@ -24,7 +24,7 @@ class Nextion:
         self,
         url: str,
         baudrate: int = None,
-        event_handler: typing.Callable[[EventType, any], None] = None,
+        event_handler: typing.Callable[[EventType, any], typing.Union[typing.Awaitable[None], None]] = None,
         loop=asyncio.get_event_loop(),
         reconnect_attempts: int = 3,
         encoding: str = "ascii",
@@ -59,33 +59,39 @@ class Nextion:
 
         typ = message[0]
         if typ == EventType.TOUCH:  # Touch event
-            self.event_handler(
+            self._schedule_event_message_handler(
                 EventType(typ),
                 TouchDataPayload._make(struct.unpack("BBB", message[1:])),
             )
         elif typ == EventType.TOUCH_COORDINATE:  # Touch coordinate
-            self.event_handler(
+            self._schedule_event_message_handler(
                 EventType(typ),
                 TouchCoordinateDataPayload._make(struct.unpack("HHB", message[1:])),
             )
         elif typ == EventType.TOUCH_IN_SLEEP:  # Touch event in sleep mode
-            self.event_handler(
+            self._schedule_event_message_handler(
                 EventType(typ),
                 TouchCoordinateDataPayload._make(struct.unpack("HHB", message[1:])),
             )
         elif typ == EventType.AUTO_SLEEP:  # Device automatically enters into sleep mode
             self._sleeping = True
-            self.event_handler(EventType(typ), None)
+            self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.AUTO_WAKE:  # Device automatically wake up
             self._loop.create_task(self.on_wakeup())
-            self.event_handler(EventType(typ), None)
+            self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.STARTUP:  # System successful start up
             self._loop.create_task(self.on_startup())
-            self.event_handler(EventType(typ), None)
+            self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
-            self.event_handler(EventType(typ), None)
+            self._schedule_event_message_handler(EventType(typ), None)
         else:
             logger.warning("Other event: 0x%02x", typ)
+
+    def _schedule_event_message_handler(self, type_, data):
+        if asyncio.iscoroutinefunction(self.event_handler):
+            self._loop.create_task(self.event_handler(type_, data))
+        else:
+            self._loop.call_soon(self.event_handler, type_, data)
 
     def _make_protocol(self) -> NextionProtocol:
         return NextionProtocol(event_message_handler=self.event_message_handler)

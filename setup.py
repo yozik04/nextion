@@ -15,7 +15,7 @@ def read(filename, parent=None):
 
 setup(
     name="nextion",
-    version="1.7.1",
+    version="1.8.0",
     packages=find_packages(exclude=["tests", "tests.*"]),
     python_requires=">=3.5.1, <4",
     license="LGPL 3",
