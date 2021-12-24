@@ -17,7 +17,7 @@ setup(
     name="nextion",
     version="1.8.0",
     packages=find_packages(exclude=["tests", "tests.*"]),
-    python_requires=">=3.5.1, <4",
+    python_requires=">=3.6.0, <4",
     license="LGPL 3",
     author="Jevgeni Kiski",
     author_email="yozik04@gmail.com",
@@ -36,7 +36,7 @@ setup(
     ],
     install_requires=["pyserial-asyncio"],
     setup_requires=["wheel"],
-    tests_require=["asynctest", "mock"],
+    tests_require=["asynctest"],
     entry_points={
         "console_scripts": [
             "nextion-fw-upload = nextion.console_scripts.upload_firmware:main"
