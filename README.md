@@ -1,4 +1,4 @@
-# Nextion serial client [![Build Status](https://travis-ci.org/yozik04/nextion.svg?branch=master)](https://travis-ci.org/yozik04/nextion)
+# Nextion serial client [![Build](https://github.com/yozik04/nextion/actions/workflows/python-package.yml/badge.svg)](https://github.com/yozik04/nextion/actions/workflows/python-package.yml)
 Lightweight Python 3.6+ async library to control Nextion displays.
 
 ## Installation
