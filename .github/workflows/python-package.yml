@@ -35,8 +35,5 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Python Unit Test
-      uses: onichandame/python-test-action@0.0.0
-      with:
-        #deps_list: # default is requirements.txt
-        path: .
-        test_dir: tests
+      run: |
+        python3 -m unittest discover -s tests
