@@ -128,5 +128,5 @@ optional arguments:
 ```
 
 # Additional resources:
-- https://www.itead.cc/wiki/Nextion_Instruction_Set
+- https://nextion.tech/instruction-set/
 - [PyPI](https://pypi.org/project/nextion/)
