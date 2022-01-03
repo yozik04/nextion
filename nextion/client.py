@@ -296,7 +296,7 @@ class Nextion:
                     type_ = response[0]
                     raw = response[1:]
                     if type_ == ResponseType.PAGE:  # Page ID
-                        data = raw[1]
+                        data = raw[0]
                     elif type_ == ResponseType.STRING:  # string
                         data = raw.decode(self.encoding)
                     elif type_ == ResponseType.NUMBER:  # number
