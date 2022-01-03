@@ -44,6 +44,14 @@ class AbstractTestClient(ABC):
 
         assert result == "40"
 
+    async def test_sendme_pageid(self):
+        result = await self._get_mocked_result(
+            "6605", lambda client: client.command("sendme"), "sendme"
+        )
+
+        print(result)
+        assert result == 5
+
     async def test_set(self):
         result = await self._get_mocked_result(
             b"\x01", lambda client: client.set("sleep", 1), "sleep=1"
