@@ -1,98 +1,115 @@
-import binascii
-import typing
-from abc import ABC, abstractmethod
+import asyncio
+from unittest.mock import AsyncMock, Mock
 
-import asynctest
+import pytest
 
 from nextion import Nextion
-from tests.decorators import with_client
+from nextion.client import TouchDataPayload
+from nextion.protocol.nextion import EventType, NextionProtocol
 
 
-class AbstractTestClient(ABC):
-    @with_client
-    async def setUp(self, client: Nextion, protocol):
-        self.client = client
-        self.protocol = protocol
-
-    @abstractmethod
-    async def _get_mocked_result(
-        self,
-        response_data,
-        action_fn: typing.Callable[[Nextion], typing.Any],
-        asset_command_called,
-    ):
-        pass
-
-    async def test_get_numeric(self):
-        result = await self._get_mocked_result(
-            "7101000000", lambda client: client.get("sleep"), "get sleep"
-        )
-
-        assert result == 1
-
-    async def test_get_negative_numeric(self):
-        result = await self._get_mocked_result(
-            "71a5ffffff", lambda client: client.get("var1"), "get var1"
-        )
-
-        assert result == -91
-
-    async def test_get_string(self):
-        result = await self._get_mocked_result(
-            "703430", lambda client: client.get("t16.txt"), "get t16.txt"
-        )
-
-        assert result == "40"
-
-    async def test_sendme_pageid(self):
-        result = await self._get_mocked_result(
-            "6605", lambda client: client.command("sendme"), "sendme"
-        )
-
-        print(result)
-        assert result == 5
-
-    async def test_set(self):
-        result = await self._get_mocked_result(
-            b"\x01", lambda client: client.set("sleep", 1), "sleep=1"
-        )
-
-        assert result is True
+@pytest.fixture
+async def transport() -> Mock:
+    return Mock()
 
 
-class TestClientAfter1_61_1(AbstractTestClient, asynctest.TestCase):
-    async def _get_mocked_result(
-        self,
-        response_data,
-        action_fn: typing.Callable[[Nextion], typing.Any],
-        asset_command_called,
-    ):
-        if isinstance(response_data, str):
-            response_data = binascii.unhexlify(response_data)
-        if isinstance(asset_command_called, str):
-            asset_command_called = asset_command_called.encode()
-
-        self.protocol.read = asynctest.CoroutineMock(side_effect=[response_data])
-        result = await action_fn(self.client)  # self.client.get(variable)
-        self.protocol.write.assert_called_once_with(asset_command_called)
-        return result
+@pytest.fixture
+def event_handler():
+    return Mock()
 
 
-class TestClientPrior1_61_1(AbstractTestClient, asynctest.TestCase):
-    async def _get_mocked_result(
-        self,
-        response_data,
-        action_fn: typing.Callable[[Nextion], typing.Any],
-        asset_command_called,
-    ):
-        if isinstance(response_data, str):
-            response_data = binascii.unhexlify(response_data)
-        if isinstance(asset_command_called, str):
-            asset_command_called = asset_command_called.encode()
+@pytest.fixture
+async def protocol(transport) -> NextionProtocol:
+    protocol = NextionProtocol(
+        lambda x: None
+    )  # Assuming a lambda for the event_message_handler
+    protocol.connection_made(transport)
+    protocol.read = AsyncMock()
+    protocol.read_no_wait = Mock(side_effect=asyncio.QueueEmpty)
+    protocol.write = Mock()
 
-        self.protocol.read = asynctest.CoroutineMock(
-            side_effect=[response_data, b"\01", b""]
-        )
-        result = await action_fn(self.client)  # self.client.get(variable)
-        self.protocol.write.assert_called_once_with(asset_command_called)
-        return result
+    return protocol
+
+
+@pytest.fixture
+async def client(protocol: NextionProtocol, event_handler) -> Nextion:
+    client = Nextion("/dev/ttyS1", 9600, event_handler)
+    client._connection = protocol
+    protocol.event_message_handler = client.event_message_handler
+    return client
+
+
+@pytest.mark.parametrize(
+    "response_data, expected_result, variable",
+    [
+        ([b"\x71\x01\x00\x00\x00"], 1, "sleep"),
+        ([b"\x71\x01\x00\x00\x00", b"\01", b""], 1, "sleep"),
+        ([b"\x71\xa5\xff\xff\xff"], -91, "var1"),
+        ([b"\x71\xa5\xff\xff\xff", b"\01", b""], -91, "var1"),
+        ([b"\x70\x34\x30"], "40", "t16.txt"),
+        ([b"\x70\x34\x30", b"\01", b""], "40", "t16.txt"),
+    ],
+)
+async def test_get(client, protocol, response_data, expected_result, variable):
+    protocol.read.side_effect = response_data
+    result = await client.get(variable)
+    protocol.write.assert_called_once_with(f"get {variable}".encode())
+    assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "response_data, expected_result, command",
+    [
+        (b"\x66\x05\xff\xff\xff", 5, "sendme"),
+        (b"\x66\x05\xff\xff\xff\01\xff\xff\xff\xff\xff\xff", 5, "sendme"),
+    ],
+)
+async def test_command(client, protocol, response_data, expected_result, command):
+    protocol.read.side_effect = [response_data]
+    assert await client.command(command) == expected_result
+    protocol.write.assert_called_once_with(command.encode())
+
+
+@pytest.mark.parametrize(
+    "response_data, variable, value",
+    [
+        (b"\x01\xff\xff\xff", "sleep", 1),
+        (b"\x01\xff\xff\xff\01\xff\xff\xff\xff\xff\xff", "sleep", 1),
+    ],
+)
+async def test_set(client, protocol, response_data, variable, value):
+    protocol.data_received(response_data)
+    assert await client.set(variable, value) is True
+    protocol.write.assert_called_once_with(f"{variable}={value}".encode())
+
+
+async def test_event_handler(client, protocol, event_handler):
+    event_handler_called = asyncio.Future()
+
+    def event_handler_called_set_result(*args):
+        event_handler_called.set_result(args)
+
+    event_handler.side_effect = event_handler_called_set_result
+
+    protocol.data_received(b"\x65\x01\x03\x01\xff\xff\xff")
+    await asyncio.wait_for(event_handler_called, timeout=0.1)
+    assert event_handler_called.result() == (
+        EventType.TOUCH,
+        TouchDataPayload(page_id=1, component_id=3, touch_event=1),
+    )
+
+
+async def test_async_event_handler(client, protocol, event_handler):
+    event_handler_called = asyncio.Future()
+
+    async def event_handler_called_set_result(*args):
+        event_handler_called.set_result(args)
+
+    event_handler.side_effect = event_handler_called_set_result
+
+    protocol.data_received(b"\x65\x01\x03\x01\xff\xff\xff")
+    await asyncio.wait_for(event_handler_called, timeout=0.1)
+    assert event_handler_called.result() == (
+        EventType.TOUCH,
+        TouchDataPayload(page_id=1, component_id=3, touch_event=1),
+    )
