@@ -1,13 +1,13 @@
 import asyncio
 import binascii
+from collections import namedtuple
+from io import BufferedReader
 import logging
 import os
 import struct
 import typing
-from collections import namedtuple
-from io import BufferedReader
 
-import serial_asyncio
+import serial_asyncio_fast as serial_asyncio
 
 from .constants import BAUDRATES, IO_TIMEOUT
 from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
@@ -15,29 +15,30 @@ from .protocol import BasicProtocol, EventType, NextionProtocol, ResponseType
 
 logger = logging.getLogger("nextion").getChild(__name__)
 
-TouchDataPayload = namedtuple("Touch", "page_id component_id touch_event")
-TouchCoordinateDataPayload = namedtuple("TouchCoordinate", "x y touch_event")
+TouchDataPayload = namedtuple("TouchDataPayload", "page_id component_id touch_event")
+TouchCoordinateDataPayload = namedtuple("TouchCoordinateDataPayload", "x y touch_event")
+
+
+async def default_event_handler(type_, data):
+    logger.info(f"Event {type_} data: {str(data)}")
 
 
 class Nextion:
     def __init__(
         self,
         url: str,
-        baudrate: int = None,
-        event_handler: typing.Callable[[EventType, any], typing.Union[typing.Awaitable[None], None]] = None,
-        loop=asyncio.get_event_loop(),
+        baudrate: typing.Optional[int] = None,
+        event_handler: typing.Callable[
+            [EventType, typing.Any], typing.Union[typing.Awaitable[None], None]
+        ] = default_event_handler,
         reconnect_attempts: int = 3,
         encoding: str = "ascii",
     ):
-        self._loop = loop
-
         self._url = url
         self._baudrate = baudrate
-        self._connection = None
+        self._connection: typing.Optional[NextionProtocol] = None
         self._command_lock = asyncio.Lock()
-        self.event_handler = event_handler or (
-            lambda t, d: logger.info("Event %s data: %s" % (t, str(d)))
-        )
+        self.event_handler = event_handler
         self.reconnect_attempts = reconnect_attempts
         self.encoding = encoding
 
@@ -50,7 +51,7 @@ class Nextion:
     async def on_wakeup(self):
         logger.debug('Updating variables after wakeup: "%s"', str(self.sets_todo))
         for k, v in self.sets_todo.items():
-            self._loop.create_task(self.set(k, v))
+            asyncio.create_task(self.set(k, v))
         self.sets_todo = {}
         self._sleeping = False
 
@@ -77,10 +78,10 @@ class Nextion:
             self._sleeping = True
             self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.AUTO_WAKE:  # Device automatically wake up
-            self._loop.create_task(self.on_wakeup())
+            asyncio.create_task(self.on_wakeup())
             self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.STARTUP:  # System successful start up
-            self._loop.create_task(self.on_startup())
+            asyncio.create_task(self.on_startup())
             self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
             self._schedule_event_message_handler(EventType(typ), None)
@@ -88,10 +89,14 @@ class Nextion:
             logger.warning("Other event: 0x%02x", typ)
 
     def _schedule_event_message_handler(self, type_, data):
-        if asyncio.iscoroutinefunction(self.event_handler):
-            self._loop.create_task(self.event_handler(type_, data))
-        else:
-            self._loop.call_soon(self.event_handler, type_, data)
+        asyncio.create_task(self._call_event_handler(type_, data))
+
+    async def _call_event_handler(self, type_, data):
+        result = self.event_handler(type_, data)
+        if not asyncio.iscoroutine(result):
+            return result
+
+        return await result
 
     def _make_protocol(self) -> NextionProtocol:
         return NextionProtocol(event_message_handler=self.event_message_handler)
@@ -151,7 +156,7 @@ class Nextion:
 
     async def _create_serial_connection(self, baud):
         _, self._connection = await serial_asyncio.create_serial_connection(
-            self._loop, self._make_protocol, url=self._url, baudrate=baud
+            asyncio.get_event_loop(), self._make_protocol, url=self._url, baudrate=baud
         )
 
     async def connect(self) -> None:
@@ -170,7 +175,7 @@ class Nextion:
 
             try:
                 await self._command("bkcmd=3", attempts=1)
-            except CommandTimeout as e:
+            except CommandTimeout:
                 pass  # it is fine
 
             await self._update_sleep_status()
@@ -179,7 +184,7 @@ class Nextion:
         except ConnectionFailed:
             logger.exception("Connection failed")
             raise
-        except:
+        except Exception:
             logger.exception("Unexpected exception during connect")
             raise
 
@@ -215,9 +220,13 @@ class Nextion:
         await self.connect()
 
     async def disconnect(self) -> None:
-        await self._connection.close()
+        if self._connection:
+            await self._connection.close()
 
     async def read_packet(self, timeout=IO_TIMEOUT) -> bytes:
+        if not self._connection:
+            raise ConnectionFailed("Connection is not established")
+
         return await asyncio.wait_for(self._connection.read(), timeout=timeout)
 
     async def get(self, key, timeout=IO_TIMEOUT):
@@ -242,7 +251,7 @@ class Nextion:
             )
             self.sets_todo[key] = value
         else:
-            return await self.command("%s=%s" % (key, out_value), timeout=timeout)
+            return await self.command(f"{key}={out_value}", timeout=timeout)
 
     async def _command(self, command: str, timeout=IO_TIMEOUT, attempts=None):
         assert attempts is None or attempts > 0
@@ -272,7 +281,7 @@ class Nextion:
             while not finished:
                 try:
                     response = await self.read_packet(timeout=timeout)
-                except asyncio.TimeoutError as e:
+                except asyncio.TimeoutError:
                     logger.error('Command "%s" timeout.', command)
                     last_exception = CommandTimeout(
                         'Command "%s" response was not received' % command
@@ -307,7 +316,7 @@ class Nextion:
                         )
                     if command.partition(" ")[0] in ["get", "sendme"]:
                         finished = True
-            else:  # this will run if loop ended successfully
+            else:  # this will run if while loop ended successfully
                 return data if data is not None else result
 
         if last_exception is not None:
@@ -371,12 +380,15 @@ class Nextion:
         logger.info("Reconnecting at new baud rate: %d" % (upload_baud))
         await self._connection.close()
         _, self._connection = await serial_asyncio.create_serial_connection(
-            self._loop, self._make_upload_protocol, url=self._url, baudrate=upload_baud
+            asyncio.get_event_loop(),
+            self._make_upload_protocol,
+            url=self._url,
+            baudrate=upload_baud,
         )
 
         res = await self.read_packet(timeout=1)
         if res != b"\x05":
-            raise IOError(
+            raise OSError(
                 "Wrong response to upload command: %s" % binascii.hexlify(res)
             )
 
@@ -393,7 +405,7 @@ class Nextion:
             timeout = len(buf) * 12 / self._baudrate + 1
             res = await self.read_packet(timeout=timeout)
             if res != b"\x05":
-                raise IOError(
+                raise OSError(
                     "Wrong response while uploading chunk: %s" % binascii.hexlify(res)
                 )
 

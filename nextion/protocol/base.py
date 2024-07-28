@@ -45,6 +45,5 @@ class BasicProtocol(asyncio.Protocol):
         logger.error("Connection lost")
         if not self.connect_future.done():
             self.connect_future.set_result(False)
-        # self.connect_future = asyncio.get_event_loop().create_future()
         if not self.disconnect_future.done():
             self.disconnect_future.set_result(True)
