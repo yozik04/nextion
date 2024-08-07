@@ -35,7 +35,7 @@ async def protocol(transport) -> NextionProtocol:
 async def client(protocol: NextionProtocol, event_handler) -> Nextion:
     client = Nextion("/dev/ttyS1", 9600, event_handler)
     client._connection = protocol
-    protocol.event_message_handler = client.event_message_handler
+    protocol.event_message_handler = client._handle_event
     return client
 
 

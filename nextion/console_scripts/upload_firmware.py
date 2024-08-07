@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 from nextion.client import Nextion
-from nextion.constants import BAUDRATES
+from nextion.constants import BAUD_RATES
 
 
 async def upload(args):
@@ -12,7 +12,7 @@ async def upload(args):
 
     try:
         await nextion.upload_firmware(args.file, args.upload_baud)
-    except:
+    except Exception:
         logging.exception("Failed to upload firmware")
 
 
@@ -20,7 +20,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("device", help="device serial port")
     parser.add_argument(
-        "-b", "--baud", type=int, default=None, help="baud rate", choices=BAUDRATES
+        "-b", "--baud", type=int, default=None, help="baud rate", choices=BAUD_RATES
     )
     parser.add_argument(
         "-ub",
@@ -28,7 +28,7 @@ def main():
         type=int,
         default=115200,
         help="upload baud rate",
-        choices=BAUDRATES,
+        choices=BAUD_RATES,
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="output debug messages"
