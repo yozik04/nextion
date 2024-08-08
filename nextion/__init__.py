@@ -1,5 +1,5 @@
-from .client import EventType, Nextion
-from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
+from nextion.client import EventType, Nextion
+from nextion.exceptions import CommandFailed, CommandTimeout, ConnectionFailed
 
 __version__ = "2.0.0"
 

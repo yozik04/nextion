@@ -11,9 +11,16 @@ import warnings
 
 import serial_asyncio_fast as serial_asyncio
 
-from .constants import BAUD_RATES, IO_TIMEOUT
-from .exceptions import CommandFailed, CommandTimeout, ConnectionFailed
-from .protocol import BasicProtocol, EventType, NextionProtocol, ResponseType
+from nextion.constants import BAUD_RATES, IO_TIMEOUT
+from nextion.exceptions import (
+    CommandFailed,
+    CommandTimeout,
+    ConnectionFailed,
+    InvalidReply,
+    NoValidReply,
+    UnsupportedBaudRate,
+)
+from nextion.protocol import BasicProtocol, EventType, NextionProtocol, ResponseType
 
 logger = logging.getLogger("nextion").getChild(__name__)
 
@@ -34,18 +41,6 @@ class DeviceInfo:
     firmware_version: str
     serial_number: str
     flash_size: str
-
-
-class UnsupportedBaudRate(ConnectionFailed):
-    pass
-
-
-class NoValidReply(ConnectionFailed):
-    pass
-
-
-class InvalidReply(ConnectionFailed):
-    pass
 
 
 class Nextion:
