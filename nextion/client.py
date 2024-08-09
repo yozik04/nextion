@@ -231,10 +231,10 @@ class Nextion:
                 logger.warning(e)
         raise NoValidReply("No valid reply received during connection attempts")
 
-    async def _update_sleep_status(self):
+    async def _update_sleep_status(self) -> None:
         self._sleeping = bool(await self._command("get sleep"))
 
-    def _get_priority_ordered_baud_rates(self):
+    def _get_priority_ordered_baud_rates(self) -> list[int]:
         baud_rates = BAUD_RATES.copy()
         if self._baud_rate:  # if a baud rate specified put it first in array
             try:
@@ -244,7 +244,7 @@ class Nextion:
             baud_rates.insert(0, self._baud_rate)
         return baud_rates
 
-    async def reconnect(self):
+    async def reconnect(self) -> None:
         """Reconnect to the device"""
         await self._connection.close()
         await self.connect()
@@ -265,8 +265,13 @@ class Nextion:
         """Get a value from the device"""
         return await self.command(f"get {key}", timeout=timeout)
 
-    async def set(self, key: str, value: ValueType, timeout=IO_TIMEOUT):
-        """Set a value on the device"""
+    async def set(
+        self, key: str, value: ValueType, timeout=IO_TIMEOUT
+    ) -> Optional[ValueType]:
+        """Set a value on the device
+
+        Returns None is device is sleeping and set is scheduled for execution after wakeup
+        """
         if isinstance(value, str):
             out_value = f'"{value}"'
         elif isinstance(value, float):
@@ -289,7 +294,7 @@ class Nextion:
 
     async def _command(
         self, command: str, timeout=IO_TIMEOUT, attempts: Union[int, None] = None
-    ):
+    ) -> Optional[ValueType]:
         attempts_remained = (
             attempts if attempts is not None else self._reconnect_attempts
         )
@@ -359,13 +364,13 @@ class Nextion:
         if last_exception is not None:
             raise last_exception
 
-    def _write_command_raw(self, command: bytes):
+    def _write_command_raw(self, command: bytes) -> None:
         """Write a raw command to the device"""
         assert self._connection
 
         self._connection.write(command)
 
-    def _flush_read_buffer(self):
+    def _flush_read_buffer(self) -> None:
         """Flush the read buffer"""
         try:
             while True:
@@ -379,11 +384,11 @@ class Nextion:
             return await self._command(command, timeout=timeout, attempts=attempts)
 
     @property
-    def sleeping(self):
+    def sleeping(self) -> bool:
         """Check if the device is sleeping"""
         return self._sleeping
 
-    def is_sleeping(self):
+    def is_sleeping(self) -> bool:
         """Check if the device is sleeping"""
         warnings.warn(
             "The 'is_sleeping' method is deprecated and will be removed in a future version.",
@@ -392,21 +397,21 @@ class Nextion:
         )
         return self._sleeping
 
-    async def sleep(self):
+    async def sleep(self) -> None:
         """Put the device to sleep"""
         if self._sleeping:
             return
         await self.set("sleep", 1)
         self._sleeping = True
 
-    async def wakeup(self):
+    async def wakeup(self) -> None:
         """Wake the device up"""
         if not self._sleeping:
             return
         await self.set("sleep", 0)
         await self._on_wakeup()
 
-    async def dim(self, val: int):
+    async def dim(self, val: int) -> None:
         """Set the device brightness"""
         assert 0 <= val <= 100
         await self.set("dim", val)

@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -76,16 +76,40 @@ async def test_command_failed(client, protocol):
 
 
 @pytest.mark.parametrize(
-    "response_data, variable, value",
+    "response_data",
     [
-        (b"\x01\xff\xff\xff", "sleep", 1),
-        (b"\x01\xff\xff\xff\01\xff\xff\xff\xff\xff\xff", "sleep", 1),
+        (b"\x01\xff\xff\xff"),
+        (b"\x01\xff\xff\xff\01\xff\xff\xff\xff\xff\xff"),
     ],
 )
-async def test_set(client, protocol, response_data, variable, value):
+async def test_wakeup(client, protocol, response_data):
     protocol.write.side_effect = lambda _: protocol.data_received(response_data)
-    assert await client.set(variable, value) is True
-    protocol.write.assert_called_once_with(f"{variable}={value}".encode())
+    await client.wakeup()
+    protocol.write.assert_called_once_with(b"sleep=0")
+
+
+@pytest.mark.parametrize(
+    "response_data, variable, value",
+    [
+        (b"\x01\xff\xff\xff", "var.txt", "Hello"),
+        (b"\x01\xff\xff\xff", "num.txt", -91),
+        (b"\x01\xff\xff\xff", "num.txt", 5.123),
+    ],
+)
+async def test_set_during_sleep(client, protocol, response_data, variable, value):
+    protocol.write.side_effect = lambda _: protocol.data_received(response_data)
+    await client.set(variable, value)
+    protocol.write.assert_not_called()
+    await client.wakeup()
+    await asyncio.sleep(0)  # Allow background tasks to complete
+
+    expected_value = value
+    if isinstance(expected_value, (str, float)):
+        expected_value = f'"{expected_value}"'
+
+    protocol.write.assert_has_calls(
+        [call(b"sleep=0"), call(f"{variable}={expected_value}".encode())]
+    )
 
 
 async def test_event_handler(client, protocol, event_handler):
