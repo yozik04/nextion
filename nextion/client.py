@@ -6,7 +6,7 @@ from io import BufferedReader
 import logging
 import os
 import struct
-from typing import Any, Awaitable, Callable, Dict, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 import warnings
 
 import serial_asyncio_fast as serial_asyncio
@@ -234,7 +234,7 @@ class Nextion:
     async def _update_sleep_status(self) -> None:
         self._sleeping = bool(await self._command("get sleep"))
 
-    def _get_priority_ordered_baud_rates(self) -> list[int]:
+    def _get_priority_ordered_baud_rates(self) -> List[int]:
         baud_rates = BAUD_RATES.copy()
         if self._baud_rate:  # if a baud rate specified put it first in array
             try:
@@ -267,7 +267,7 @@ class Nextion:
 
     async def set(
         self, key: str, value: ValueType, timeout=IO_TIMEOUT
-    ) -> Optional[ValueType]:
+    ) -> Union[ValueType, None]:
         """Set a value on the device
 
         Returns None is device is sleeping and set is scheduled for execution after wakeup
@@ -289,12 +289,13 @@ class Nextion:
                 f'Device sleeps. Scheduling "{key}" set for execution after wakeup'
             )
             self._pending_sets[key] = value
+            return None
         else:
             return await self.command(f"{key}={out_value}", timeout=timeout)
 
     async def _command(
         self, command: str, timeout=IO_TIMEOUT, attempts: Union[int, None] = None
-    ) -> Optional[ValueType]:
+    ) -> Union[ValueType, None]:
         attempts_remained = (
             attempts if attempts is not None else self._reconnect_attempts
         )
@@ -363,6 +364,8 @@ class Nextion:
 
         if last_exception is not None:
             raise last_exception
+
+        return None
 
     def _write_command_raw(self, command: bytes) -> None:
         """Write a raw command to the device"""
