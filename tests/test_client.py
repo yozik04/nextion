@@ -89,6 +89,21 @@ async def test_wakeup(client, protocol, response_data):
     protocol.write.assert_called_once_with(b"sleep=0")
 
 
+async def test_sleep(client, protocol):
+    protocol.write.side_effect = lambda _: protocol.data_received(b"\x01\xff\xff\xff")
+    await client.wakeup()
+    assert not client.sleeping
+    await client.sleep()
+    protocol.write.assert_has_calls([call(b"sleep=0"), call(b"sleep=1")])
+
+
+async def test_dim(client, protocol):
+    protocol.write.side_effect = lambda _: protocol.data_received(b"\x01\xff\xff\xff")
+    await client.wakeup()
+    await client.dim(50)
+    protocol.write.assert_has_calls([call(b"sleep=0"), call(b"dim=50")])
+
+
 @pytest.mark.parametrize(
     "response_data, variable, value",
     [
@@ -113,7 +128,7 @@ async def test_set_during_sleep(client, protocol, response_data, variable, value
     )
 
 
-async def test_wake_event(client, protocol):
+async def test_auto_wake_event(client, protocol):
     protocol.write.side_effect = lambda _: protocol.data_received(b"\x01\xff\xff\xff")
     await client.set("var.txt", 30)
     protocol.write.assert_not_called()
@@ -121,6 +136,7 @@ async def test_wake_event(client, protocol):
     # Simulate wake event received
     protocol.data_received(b"\x87\xff\xff\xff")
     await asyncio.sleep(0)  # Allow background tasks to complete
+    assert not client.sleeping
 
     protocol.write.assert_called_once_with(b"var.txt=30")
 
