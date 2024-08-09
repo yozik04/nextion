@@ -1,10 +1,11 @@
 import asyncio
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
 from nextion import Nextion
 from nextion.client import TouchDataPayload
+from nextion.exceptions import CommandFailed
 from nextion.protocol.nextion import EventType, NextionProtocol
 
 
@@ -24,8 +25,6 @@ async def protocol(transport) -> NextionProtocol:
         lambda x: None
     )  # Assuming a lambda for the event_message_handler
     protocol.connection_made(transport)
-    protocol.read = AsyncMock()
-    protocol.read_no_wait = Mock(side_effect=asyncio.QueueEmpty)
     protocol.write = Mock()
 
     return protocol
@@ -42,16 +41,16 @@ async def client(protocol: NextionProtocol, event_handler) -> Nextion:
 @pytest.mark.parametrize(
     "response_data, expected_result, variable",
     [
-        ([b"\x71\x01\x00\x00\x00"], 1, "sleep"),
-        ([b"\x71\x01\x00\x00\x00", b"\01", b""], 1, "sleep"),
-        ([b"\x71\xa5\xff\xff\xff"], -91, "var1"),
-        ([b"\x71\xa5\xff\xff\xff", b"\01", b""], -91, "var1"),
-        ([b"\x70\x34\x30"], "40", "t16.txt"),
-        ([b"\x70\x34\x30", b"\01", b""], "40", "t16.txt"),
+        (b"\x71\x01\x00\x00\x00\xff\xff\xff", 1, "sleep"),
+        (b"\x71\x01\x00\x00\x00\xff\xff\xff\01\xff\xff\xff\xff\xff\xff", 1, "sleep"),
+        (b"\x71\xa5\xff\xff\xff\xff\xff\xff", -91, "var1"),
+        (b"\x71\xa5\xff\xff\xff\xff\xff\xff\01\xff\xff\xff\xff\xff\xff", -91, "var1"),
+        (b"\x70\x34\x30\xff\xff\xff", "40", "t16.txt"),
+        (b"\x70\x34\x30\xff\xff\xff\01\xff\xff\xff\xff\xff\xff", "40", "t16.txt"),
     ],
 )
 async def test_get(client, protocol, response_data, expected_result, variable):
-    protocol.read.side_effect = response_data
+    protocol.write.side_effect = lambda _: protocol.data_received(response_data)
     result = await client.get(variable)
     protocol.write.assert_called_once_with(f"get {variable}".encode())
     assert result == expected_result
@@ -65,9 +64,15 @@ async def test_get(client, protocol, response_data, expected_result, variable):
     ],
 )
 async def test_command(client, protocol, response_data, expected_result, command):
-    protocol.read.side_effect = [response_data]
+    protocol.write.side_effect = lambda _: protocol.data_received(response_data)
     assert await client.command(command) == expected_result
     protocol.write.assert_called_once_with(command.encode())
+
+
+async def test_command_failed(client, protocol):
+    protocol.write.side_effect = lambda _: protocol.data_received(b"\x03\xff\xff\xff")
+    with pytest.raises(CommandFailed):
+        await client.command("page 2")
 
 
 @pytest.mark.parametrize(
@@ -78,7 +83,7 @@ async def test_command(client, protocol, response_data, expected_result, command
     ],
 )
 async def test_set(client, protocol, response_data, variable, value):
-    protocol.data_received(response_data)
+    protocol.write.side_effect = lambda _: protocol.data_received(response_data)
     assert await client.set(variable, value) is True
     protocol.write.assert_called_once_with(f"{variable}={value}".encode())
 
