@@ -270,7 +270,7 @@ class Nextion:
         return await self.command(f"get {key}", timeout=timeout)
 
     async def set(
-        self, key: str, value: ValueType, timeout=IO_TIMEOUT
+        self, key: str, value: ValueType, timeout=IO_TIMEOUT, do_not_defer=False
     ) -> Union[ValueType, None]:
         """Set a value on the device
 
@@ -288,7 +288,7 @@ class Nextion:
                 f'value type "{type(value).__name__}" is not supported for set'
             )
 
-        if self._sleeping and key not in ["sleep"]:
+        if not do_not_defer and self._sleeping and key not in ["sleep"]:
             logger.debug(
                 f'Device sleeps. Scheduling "{key}" set for execution after wakeup'
             )
