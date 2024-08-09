@@ -1,9 +1,9 @@
 import binascii
+from enum import IntEnum
 import logging
 import typing
-from enum import IntEnum
 
-from .base import BasicProtocol
+from nextion.protocol.base import BasicProtocol
 
 logger = logging.getLogger("nextion").getChild(__name__)
 
@@ -44,7 +44,7 @@ class NextionProtocol(BasicProtocol):
     }
 
     def __init__(self, event_message_handler: typing.Callable):
-        super(NextionProtocol, self).__init__()
+        super().__init__()
         self.buffer = b""
         self.dropped_buffer = b""
         self.event_message_handler = event_message_handler

@@ -25,7 +25,7 @@ class BaseDummyNextionProtocol(BasicProtocol):
             else:
                 self.data_received(response)
         else:
-            logger.error(f"write with no response(eol={eol}): {data}")
+            logger.error(f"write with no response(eol={eol}): {data!r}")
 
 
 class DummyNextionProtocol_1_61_1(BaseDummyNextionProtocol):

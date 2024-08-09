@@ -21,19 +21,33 @@ class NextionException(Exception):
     pass
 
 
+class CommandFailed(NextionException):
+    def __init__(self, command, code):
+        if code in command_failed_codes:
+            msg = f"{command_failed_codes[code]} for command: {command}"
+        else:
+            msg = "Unknown response code 0x{:02x} for command: '{}'".format(
+                code, command
+            )
+
+        super().__init__(msg)
+
+
+class CommandTimeout(NextionException):
+    pass
+
+
 class ConnectionFailed(NextionException):
     pass
 
 
-class CommandFailed(NextionException):
-    def __init__(self, command, code):
-        if code in command_failed_codes:
-            msg = "%s for command: %s" % (command_failed_codes[code], command)
-        else:
-            msg = "Unknown response code 0x%02x for command: '%s'" % (code, command)
-
-        super(CommandFailed, self).__init__(msg)
+class UnsupportedBaudRate(ConnectionFailed):
+    pass
 
 
-class CommandTimeout(NextionException):
+class NoValidReply(ConnectionFailed):
+    pass
+
+
+class InvalidReply(ConnectionFailed):
     pass
