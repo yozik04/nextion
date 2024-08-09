@@ -71,11 +71,6 @@ class DummyOldNextionProtocol(BaseDummyNextionProtocol):
 
 
 @pytest.fixture
-def transport():
-    return Mock()
-
-
-@pytest.fixture
 def create_serial_connection():
     with patch(
         "serial_asyncio_fast.create_serial_connection"
@@ -97,11 +92,9 @@ def protocol_older():
         yield protocol
 
 
-async def connect_and_test(
-    client: Nextion, protocol, transport, create_serial_connection
-):
+async def connect_and_test(client: Nextion, protocol, create_serial_connection):
     async def on_connection_made(*args, **kwargs):
-        protocol.connection_made(transport)
+        protocol.connection_made(Mock())
         return None, protocol
 
     create_serial_connection.side_effect = on_connection_made
@@ -112,7 +105,7 @@ async def connect_and_test(
 
 
 @pytest.mark.parametrize("protocol_fixture", ["protocol_1_61_1", "protocol_older"])
-async def test_connect(protocol_fixture, request, transport, create_serial_connection):
+async def test_connect(protocol_fixture, request, create_serial_connection):
     protocol = request.getfixturevalue(protocol_fixture)
     client = Nextion("/dev/ttyS1", 9600, None)
-    await connect_and_test(client, protocol, transport, create_serial_connection)
+    await connect_and_test(client, protocol, create_serial_connection)
