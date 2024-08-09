@@ -60,7 +60,7 @@ async def test_get(client, protocol, response_data, expected_result, variable):
 @pytest.mark.parametrize(
     "response_data, expected_result, command",
     [
-        (b"\xff\xff\xff", True, "lowpower 0"),
+        (b"\xff\xff\xff", True, "lowpower=0"),
         (b"\x66\x05\xff\xff\xff", 5, "sendme"),
         (b"\x66\x05\xff\xff\xff\01\xff\xff\xff\xff\xff\xff", 5, "sendme"),
     ],
