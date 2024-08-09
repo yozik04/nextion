@@ -47,7 +47,7 @@ class Nextion:
     """A class for interacting with a Nextion device"""
 
     device_info: Optional[DeviceInfo]
-    _pending_sets: Dict[str, ValueType]
+    _deferred_sets: Dict[str, ValueType]
 
     def __init__(
         self,
@@ -70,17 +70,21 @@ class Nextion:
         self.device_info = None
 
         self._sleeping = True
-        self._pending_sets = {}
+        self._deferred_sets = {}
 
     async def _on_startup(self) -> None:
         await self.command("bkcmd=3")  # Let's ensure we receive expected responses
 
     async def _on_wakeup(self) -> None:
-        logger.debug('Updating variables after wakeup: "%s"', str(self._pending_sets))
-        for k, v in self._pending_sets.items():
-            asyncio.create_task(self.set(k, v))
-        self._pending_sets = {}
         self._sleeping = False
+
+        logger.debug('Updating variables after wakeup: "%s"', str(self._deferred_sets))
+        while self._deferred_sets:
+            k, v = self._deferred_sets.popitem()
+            try:
+                await self.set(k, v)
+            except CommandFailed as e:
+                logger.error(f'Deferred set for "{k}" has failed: {e}')
 
     def _handle_event(self, message) -> None:
         logger.debug("Handle event: %s", message)
@@ -288,7 +292,7 @@ class Nextion:
             logger.debug(
                 f'Device sleeps. Scheduling "{key}" set for execution after wakeup'
             )
-            self._pending_sets[key] = value
+            self._deferred_sets[key] = value
             return None
         else:
             return await self.command(f"{key}={out_value}", timeout=timeout)

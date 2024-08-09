@@ -35,6 +35,7 @@ async def client(protocol: NextionProtocol, event_handler) -> Nextion:
     client = Nextion("/dev/ttyS1", 9600, event_handler)
     client._connection = protocol
     protocol.event_message_handler = client._handle_event
+    assert client.sleeping
     return client
 
 
@@ -110,6 +111,18 @@ async def test_set_during_sleep(client, protocol, response_data, variable, value
     protocol.write.assert_has_calls(
         [call(b"sleep=0"), call(f"{variable}={expected_value}".encode())]
     )
+
+
+async def test_wake_event(client, protocol):
+    protocol.write.side_effect = lambda _: protocol.data_received(b"\x01\xff\xff\xff")
+    await client.set("var.txt", 30)
+    protocol.write.assert_not_called()
+
+    # Simulate wake event received
+    protocol.data_received(b"\x87\xff\xff\xff")
+    await asyncio.sleep(0)  # Allow background tasks to complete
+
+    protocol.write.assert_called_once_with(b"var.txt=30")
 
 
 async def test_event_handler(client, protocol, event_handler):
