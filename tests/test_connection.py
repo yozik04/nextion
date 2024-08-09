@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from nextion import Nextion
+from nextion.client import DeviceInfo
 from nextion.protocol import BasicProtocol
 
 logger = logging.getLogger("nextion").getChild(__name__)
@@ -38,6 +39,13 @@ class DummyNextionProtocol_1_61_1(BaseDummyNextionProtocol):
             b"bkcmd=3": b"\x01",
             b"get sleep": b"\x71\x00\x00\x00\x00",
         }
+        self.expected_device_info = DeviceInfo(
+            address="4113-0",
+            model="NX1060P101_011R",
+            firmware_version="132",
+            serial_number="55163401B399E55C",
+            flash_size="131072000-0",
+        )
         super().__init__(responses, *args, **kwargs)
 
 
@@ -52,6 +60,13 @@ class DummyOldNextionProtocol(BaseDummyNextionProtocol):
             b"thup=1": b"\x01",
             b"get sleep": [b"\x71\x00\x00\x00\x00", b"\x01"],
         }
+        self.expected_device_info = DeviceInfo(
+            address="67-0",
+            model="NX4827T043_011R",
+            firmware_version="130",
+            serial_number="E4685CB35B613636",
+            flash_size="16777216",
+        )
         super().__init__(responses, *args, **kwargs)
 
 
@@ -82,7 +97,9 @@ def protocol_older():
         yield protocol
 
 
-async def connect_and_test(client, protocol, transport, create_serial_connection):
+async def connect_and_test(
+    client: Nextion, protocol, transport, create_serial_connection
+):
     async def on_connection_made(*args, **kwargs):
         protocol.connection_made(transport)
         return None, protocol
@@ -90,6 +107,7 @@ async def connect_and_test(client, protocol, transport, create_serial_connection
     create_serial_connection.side_effect = on_connection_made
 
     await client.connect()
+    assert client.device_info == protocol.expected_device_info
     assert client.is_sleeping() is False
 
 
