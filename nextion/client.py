@@ -72,7 +72,7 @@ class Nextion:
         self._sleeping = True
         self._deferred_sets = {}
 
-    async def _on_startup(self) -> None:
+    async def _on_ready(self) -> None:
         await self.command("bkcmd=3")  # Let's ensure we receive expected responses
 
     async def _on_wakeup(self) -> None:
@@ -100,7 +100,7 @@ class Nextion:
                 EventType(typ),
                 TouchCoordinateDataPayload._make(struct.unpack("HHB", message[1:])),
             )
-        elif typ == EventType.TOUCH_IN_SLEEP:  # Touch event in sleep mode
+        elif typ == EventType.TOUCH_COORDINATE_IN_SLEEP:  # Touch event in sleep mode
             self._schedule_event_message_handler(
                 EventType(typ),
                 TouchCoordinateDataPayload._make(struct.unpack("HHB", message[1:])),
@@ -112,7 +112,7 @@ class Nextion:
             asyncio.create_task(self._on_wakeup())
             self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.STARTUP:  # System successful start up
-            asyncio.create_task(self._on_startup())
+            asyncio.create_task(self._on_ready())
             self._schedule_event_message_handler(EventType(typ), None)
         elif typ == EventType.SD_CARD_UPGRADE:  # Start SD card upgrade
             self._schedule_event_message_handler(EventType(typ), None)
@@ -127,7 +127,7 @@ class Nextion:
         if asyncio.iscoroutine(result):
             await result
 
-    async def connect(self) -> None:
+    async def connect(self) -> DeviceInfo:
         """Connect to the device"""
         try:
             await self._try_connect_on_different_baudrates()
@@ -150,6 +150,8 @@ class Nextion:
             await self._update_sleep_status()
 
             logger.info("Successfully connected to the device")
+
+            return self.device_info
         except ConnectionFailed:
             logger.exception("Connection failed")
             raise

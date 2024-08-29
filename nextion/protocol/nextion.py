@@ -9,13 +9,16 @@ logger = logging.getLogger("nextion").getChild(__name__)
 
 
 class EventType(IntEnum):
+    STARTUP = 0x00  # Nextion startup
     TOUCH = 0x65  # Touch event
     TOUCH_COORDINATE = 0x67  # Touch coordinate
-    TOUCH_IN_SLEEP = 0x68  # Touch event in sleep mode
+    TOUCH_COORDINATE_IN_SLEEP = 0x68  # Touch event in sleep mode
     AUTO_SLEEP = 0x86  # Device automatically enters into sleep mode
     AUTO_WAKE = 0x87  # Device automatically wake up
-    STARTUP = 0x88  # System successful start up
+    READY = 0x88  # System successful start up
     SD_CARD_UPGRADE = 0x89  # Start SD card upgrade
+    TRANSPARENT_DATA_FINISHED = 0xFD  # Transparent data finished
+    TRANSPARENT_DATA_READY = 0xFE  # Transparent data ready
 
 
 class ResponseType(IntEnum):
@@ -50,7 +53,13 @@ class NextionProtocol(BasicProtocol):
         self.event_message_handler = event_message_handler
 
     def is_event(self, message):
-        return len(message) > 0 and message[0] in EventType.__members__.values()
+        if message == b"\x00\x00\x00":
+            return True
+        return (
+            len(message) > 0
+            and message[0] in EventType.__members__.values()
+            and message[0] != 0x00
+        )
 
     def data_received(self, data):
         self.buffer += data
