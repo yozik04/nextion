@@ -6,7 +6,7 @@ from nextion.protocol import NextionProtocol
 
 
 @pytest.fixture
-def protocol():
+async def protocol():
     return NextionProtocol(MagicMock())
 
 

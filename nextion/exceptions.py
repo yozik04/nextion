@@ -26,14 +26,16 @@ class NextionException(Exception):
 
 class CommandFailed(NextionException):
     def __init__(self, command, code):
-        if code in command_failed_codes:
-            msg = f"{command_failed_codes[code]} for command: {command}"
-        else:
-            msg = "Unknown response code 0x{:02x} for command: '{}'".format(
-                code, command
-            )
+        self.command = command
+        self.code = code
+        super().__init__(command, code)
 
-        super().__init__(msg)
+    def __str__(self):
+        if self.code in command_failed_codes:
+            return f"{command_failed_codes[self.code]} for command: {self.command}"
+        return "Unknown response code 0x{:02x} for command: '{}'".format(
+            self.code, self.command
+        )
 
 
 class CommandTimeout(NextionException):
