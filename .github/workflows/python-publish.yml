@@ -24,13 +24,13 @@ jobs:
       # Required for PyPI Trusted Publishing (OIDC token) and attestations.
       id-token: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Check versions match
       run: |
         PUBLISHING_VERSION=${{ github.event.release.tag_name }}
         grep -qE '__version__ = "'$PUBLISHING_VERSION'"' nextion/__init__.py
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: '3.x'
     - name: Install dependencies
