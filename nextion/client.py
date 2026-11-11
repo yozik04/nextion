@@ -491,6 +491,8 @@ class Nextion:
         assert upload_baud in BAUD_RATES
 
         file_size = os.fstat(file.fileno()).st_size
+        if file_size == 0:
+            raise ValueError("Firmware file is empty")
 
         logger.info("About to upload %d bytes", file_size)
         await self.set("sleep", 0)
