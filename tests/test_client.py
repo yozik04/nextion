@@ -1,11 +1,11 @@
 import asyncio
-from unittest.mock import Mock, call
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 
 from nextion import Nextion
 from nextion.client import TouchDataPayload
-from nextion.exceptions import CommandFailed
+from nextion.exceptions import CommandFailed, ConnectionFailed
 from nextion.protocol.nextion import EventType, NextionProtocol
 
 
@@ -172,3 +172,21 @@ async def test_async_event_handler(client, protocol, event_handler):
         EventType.TOUCH,
         TouchDataPayload(page_id=1, component_id=3, touch_event=1),
     )
+
+
+async def test_event_handler_awaits_future(client, event_handler):
+    future = asyncio.Future()
+    event_handler.return_value = future
+    task = asyncio.create_task(client._call_event_handler(EventType.AUTO_WAKE, None))
+    await asyncio.sleep(0)
+    assert not task.done()
+    future.set_result(None)
+    await task
+
+
+async def test_command_after_disconnect_raises_connection_failed(client, protocol):
+    protocol.close = AsyncMock()
+    await client.disconnect()
+    with pytest.raises(ConnectionFailed, match="Connection is not established"):
+        await client.command("get sleep")
+    protocol.write.assert_not_called()

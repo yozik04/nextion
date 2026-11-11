@@ -1,5 +1,5 @@
-# Nextion serial client [![Build](https://github.com/yozik04/nextion/actions/workflows/python-package.yml/badge.svg)](https://github.com/yozik04/nextion/actions/workflows/python-package.yml)
-Lightweight Python 3.8+ async library to control Nextion displays.
+# Nextion serial client [![Build](https://github.com/yozik04/nextion/actions/workflows/test.yml/badge.svg)](https://github.com/yozik04/nextion/actions/workflows/test.yml)
+Lightweight Python 3.11+ async library to control Nextion displays.
 
 ## Installation
 ### Pypi
@@ -63,7 +63,7 @@ if __name__ == '__main__':
 ```
 url: str # serial dev
 baudrate: int # baud rate
-event_handler: typing.Callable[[EventType, any], None] # Event handler function
+event_handler: Callable[[EventType, Any], Awaitable[None] | None] # Event handler function
 loop=asyncio.get_event_loop() # your own event loop
 reconnect_attempts: int = 3 # how many times to try to retry command in case of failure
 encoding: str = 'ascii' # Nextion encoding
@@ -87,7 +87,7 @@ Get current set encoding (Not fetched from the device)
 |------------------|----------------------------|------------------------------------|
 | TOUCH            | TouchDataPayload           | page_id, component_id, touch_event |
 | TOUCH_COORDINATE | TouchCoordinateDataPayload | x, y, touch_event                  |
-| TOUCH_IN_SLEEP   | TouchCoordinateDataPayload | x, y, touch_event                  |
+| TOUCH_COORDINATE_IN_SLEEP | TouchCoordinateDataPayload | x, y, touch_event                  |
 | AUTO_SLEEP       | None                       | -                                  |
 | AUTO_WAKE        | None                       | -                                  |
 | STARTUP          | None                       | -                                  |

@@ -1,12 +1,14 @@
 import asyncio
 import binascii
 from collections import namedtuple
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+import inspect
 from io import BufferedReader
 import logging
 import os
 import struct
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any
 import warnings
 
 import serial_asyncio_fast as serial_asyncio
@@ -27,7 +29,7 @@ logger = logging.getLogger("nextion").getChild(__name__)
 TouchDataPayload = namedtuple("TouchDataPayload", "page_id component_id touch_event")
 TouchCoordinateDataPayload = namedtuple("TouchCoordinateDataPayload", "x y touch_event")
 
-ValueType = Union[str, float, int]
+ValueType = str | float | int
 
 
 async def _default_event_handler(type_, data):
@@ -46,22 +48,22 @@ class DeviceInfo:
 class Nextion:
     """A class for interacting with a Nextion device"""
 
-    device_info: Optional[DeviceInfo]
-    _deferred_sets: Dict[str, ValueType]
+    device_info: DeviceInfo | None
+    _deferred_sets: dict[str, ValueType]
 
     def __init__(
         self,
         url: str,
-        baud_rate: Optional[int] = None,
-        event_handler: Callable[
-            [EventType, Any], Union[Awaitable[None], None]
-        ] = _default_event_handler,
+        baud_rate: int | None = None,
+        event_handler: Callable[[EventType, Any], Awaitable[None] | None] = (
+            _default_event_handler
+        ),
         reconnect_attempts: int = 3,
         encoding: str = "ascii",
     ):
         self._url = url
         self._baud_rate = baud_rate
-        self._connection: Optional[NextionProtocol] = None
+        self._connection: NextionProtocol | None = None
         self._command_lock = asyncio.Lock()
         self._reconnect_attempts = reconnect_attempts
         self._encoding = encoding
@@ -124,11 +126,12 @@ class Nextion:
 
     async def _call_event_handler(self, type_, data) -> None:
         result = self.event_handler(type_, data)
-        if asyncio.iscoroutine(result):
+        if inspect.isawaitable(result):
             await result
 
     async def connect(self) -> DeviceInfo:
         """Connect to the device"""
+        connected = False
         try:
             await self._try_connect_on_different_baudrates()
 
@@ -151,6 +154,7 @@ class Nextion:
 
             logger.info("Successfully connected to the device")
 
+            connected = True
             return self.device_info
         except ConnectionFailed:
             logger.exception("Connection failed")
@@ -158,6 +162,9 @@ class Nextion:
         except Exception:
             logger.exception("Unexpected exception during connect")
             raise
+        finally:
+            if not connected:
+                await self.disconnect()
 
     async def _try_connect_on_different_baudrates(self) -> None:
         baud_rates = self._get_priority_ordered_baud_rates()
@@ -185,21 +192,29 @@ class Nextion:
                 logger.warning("Baud %s not supported: %s", baud, e)
                 raise UnsupportedBaudRate(f"Baud {baud} not supported") from e
 
-        await self._connection.wait_connection()
-
-        self._write_command_raw(
-            b"DRAKJHSUYDGBNCJHGJKSHBDN"
-        )  # exit active Protocol Reparse and return to passive mode
+        connected = False
         try:
-            await self._read_packet(
-                timeout=delay_between_connect_attempts
-            )  # We do not care what response will be here
-        except asyncio.TimeoutError:
-            pass
+            await self._connection.wait_connection()
 
-        await asyncio.sleep(delay_between_connect_attempts)  # (1000000/baud rate)+30ms
+            self._write_command_raw(
+                b"DRAKJHSUYDGBNCJHGJKSHBDN"
+            )  # exit active Protocol Reparse and return to passive mode
+            try:
+                await self._read_packet(
+                    timeout=delay_between_connect_attempts
+                )  # We do not care what response will be here
+            except asyncio.TimeoutError:
+                pass
 
-        await self._attempt_connect_messages(delay_between_connect_attempts)
+            await asyncio.sleep(
+                delay_between_connect_attempts
+            )  # (1000000/baud rate)+30ms
+
+            await self._attempt_connect_messages(delay_between_connect_attempts)
+            connected = True
+        finally:
+            if not connected:
+                await self.disconnect()
 
     async def _create_serial_connection(self, baud: int):
         _, connection = await serial_asyncio.create_serial_connection(
@@ -222,7 +237,14 @@ class Nextion:
             try:
                 result = await self._read_packet(timeout=delay_between_connect_attempts)
                 if result[:6] == b"comok ":
-                    data = result[7:].decode().split(",")
+                    try:
+                        data = result[6:].decode().split(",")
+                    except UnicodeDecodeError as e:
+                        raise InvalidReply(
+                            f"Wrong reply {result!r} to connect attempt"
+                        ) from e
+                    if len(data) < 7:
+                        raise InvalidReply(f"Wrong reply {result!r} to connect attempt")
                     self.device_info = DeviceInfo(
                         address=data[1],
                         model=data[2],
@@ -238,9 +260,9 @@ class Nextion:
         raise NoValidReply("No valid reply received during connection attempts")
 
     async def _update_sleep_status(self) -> None:
-        self._sleeping = bool(await self._command("get sleep"))
+        self._sleeping = bool(await self._command("get sleep", attempts=1))
 
-    def _get_priority_ordered_baud_rates(self) -> List[int]:
+    def _get_priority_ordered_baud_rates(self) -> list[int]:
         baud_rates = BAUD_RATES.copy()
         if self._baud_rate:  # if a baud rate specified put it first in array
             try:
@@ -252,13 +274,14 @@ class Nextion:
 
     async def reconnect(self) -> None:
         """Reconnect to the device"""
-        await self._connection.close()
+        await self.disconnect()
         await self.connect()
 
     async def disconnect(self) -> None:
         """Disconnect from the device"""
-        if self._connection:
-            await self._connection.close()
+        connection, self._connection = self._connection, None
+        if connection:
+            await connection.close()
 
     async def _read_packet(self, timeout=IO_TIMEOUT) -> bytes:
         """Read a packet from the device"""
@@ -273,7 +296,7 @@ class Nextion:
 
     async def set(
         self, key: str, value: ValueType, timeout=IO_TIMEOUT, do_not_defer=False
-    ) -> Union[ValueType, None]:
+    ) -> ValueType | None:
         """Set a value on the device
 
         Returns None is device is sleeping and set is scheduled for execution after wakeup
@@ -300,8 +323,8 @@ class Nextion:
             return await self.command(f"{key}={out_value}", timeout=timeout)
 
     async def _command(
-        self, command: str, timeout=IO_TIMEOUT, attempts: Union[int, None] = None
-    ) -> Union[ValueType, None]:
+        self, command: str, timeout=IO_TIMEOUT, attempts: int | None = None
+    ) -> ValueType | None:
         attempts_remained = (
             attempts if attempts is not None else self._reconnect_attempts
         )
@@ -323,7 +346,7 @@ class Nextion:
             self._write_command_raw(command.encode(self._encoding))
 
             result = None
-            data: Union[ValueType, None] = None
+            data: ValueType | None = None
             finished = False
 
             while not finished:
@@ -381,6 +404,8 @@ class Nextion:
 
     def _flush_read_buffer(self) -> None:
         """Flush the read buffer"""
+        if not self._connection:
+            raise ConnectionFailed("Connection is not established")
         try:
             while True:
                 logger.debug("Flushing message: %s", self._connection.read_no_wait())
