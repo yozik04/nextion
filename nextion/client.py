@@ -462,6 +462,26 @@ class Nextion:
     def _make_upload_protocol(self) -> BasicProtocol:
         return BasicProtocol()
 
+    async def _switch_to_upload_protocol(self, upload_baud: int) -> None:
+        """Switch the open port to the upload protocol and baud rate in place.
+
+        Nextion replies 0x05 at the upload baud within 500 ms of whmi-wri, so the
+        port must not be closed and reopened, as that can lose the reply.
+        See https://nextion.tech/2026/07/07/nextion-upload-protocol-v1-2/
+        """
+        assert self._connection
+        transport = self._connection.transport
+
+        upload_protocol = self._make_upload_protocol()
+        upload_protocol.connection_made(transport)
+        transport.set_protocol(upload_protocol)
+        self._connection = upload_protocol
+
+        while transport.get_write_buffer_size():
+            await asyncio.sleep(0.001)
+        transport.serial.flush()  # wait until whmi-wri has left the UART
+        transport.serial.baudrate = upload_baud
+
     async def upload_firmware(self, file: BufferedReader, upload_baud=None):
         """Upload firmware to the device"""
         upload_baud = upload_baud or self._baud_rate
@@ -479,16 +499,8 @@ class Nextion:
             logger.warning(f"Additional sleep configuration failed: {e}")
 
         self._write_command_raw(b"whmi-wri %d,%d,0" % (file_size, upload_baud))
-        logger.info(f"Reconnecting at new baud rate: {upload_baud}" % (upload_baud))
-        assert self._connection
-        await self._connection.close()
-        _, self._connection = await serial_asyncio.create_serial_connection(
-            asyncio.get_event_loop(),
-            self._make_upload_protocol,
-            url=self._url,
-            baudrate=upload_baud,
-        )
-        assert self._connection
+        logger.info("Switching to upload baud rate: %d", upload_baud)
+        await self._switch_to_upload_protocol(upload_baud)
 
         res = await self._read_packet(timeout=1)
         if res != b"\x05":
