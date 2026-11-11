@@ -190,3 +190,19 @@ async def test_command_after_disconnect_raises_connection_failed(client, protoco
     with pytest.raises(ConnectionFailed, match="Connection is not established"):
         await client.command("get sleep")
     protocol.write.assert_not_called()
+
+
+async def test_encoding_setter_is_used_for_commands(client, protocol):
+    protocol.write.side_effect = lambda data: protocol.data_received(
+        b"\x70\x32\x31\xb0C\xff\xff\xff"
+        if data.startswith(b"get")
+        else b"\x01\xff\xff\xff"
+    )
+    client._sleeping = False
+    assert client.encoding == "ascii"
+
+    client.encoding = "latin-1"
+
+    assert await client.get("t0.txt") == "21°C"
+    await client.set("t0.txt", "21°C")
+    protocol.write.assert_called_with(b't0.txt="21\xb0C"')

@@ -79,6 +79,14 @@ Get current set encoding (Not fetched from the device)
 
 `print(client.encoding)`
 
+The encoding must match the character set selected in your Nextion project and
+covered by its fonts. For example, to show a degree sign with an `iso-8859-1` project:
+
+```python
+client.encoding = "latin-1"
+await client.set("t0.txt", "21°C")
+```
+
 ## Event handling
 
 ```event_handler``` method in the example above will be called on every event coming from the display.
