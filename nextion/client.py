@@ -418,6 +418,15 @@ class Nextion:
             return await self._command(command, timeout=timeout, attempts=attempts)
 
     @property
+    def encoding(self) -> str:
+        """Encoding used for serial communication (not fetched from the device)"""
+        return self._encoding
+
+    @encoding.setter
+    def encoding(self, encoding: str) -> None:
+        self._encoding = encoding
+
+    @property
     def sleeping(self) -> bool:
         """Check if the device is sleeping"""
         return self._sleeping

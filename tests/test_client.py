@@ -245,3 +245,19 @@ async def test_upload_firmware_switches_baud_in_place(tmp_path):
     assert b"whmi-wri 4106,115200,0\xff\xff\xff" in transport.written
     assert transport.written[-2:] == [b"a" * 4096, b"b" * 10]
     assert client._connection is transport.protocol
+
+
+async def test_encoding_setter_is_used_for_commands(client, protocol):
+    protocol.write.side_effect = lambda data: protocol.data_received(
+        b"\x70\x32\x31\xb0C\xff\xff\xff"
+        if data.startswith(b"get")
+        else b"\x01\xff\xff\xff"
+    )
+    client._sleeping = False
+    assert client.encoding == "ascii"
+
+    client.encoding = "latin-1"
+
+    assert await client.get("t0.txt") == "21°C"
+    await client.set("t0.txt", "21°C")
+    protocol.write.assert_called_with(b't0.txt="21\xb0C"')

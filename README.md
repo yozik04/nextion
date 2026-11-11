@@ -1,132 +1,142 @@
-# Nextion serial client [![Build](https://github.com/yozik04/nextion/actions/workflows/test.yml/badge.svg)](https://github.com/yozik04/nextion/actions/workflows/test.yml)
-Lightweight Python 3.11+ async library to control Nextion displays.
+# Nextion serial client [![Build](https://github.com/yozik04/nextion/actions/workflows/test.yml/badge.svg)](https://github.com/yozik04/nextion/actions/workflows/test.yml) [![PyPI](https://img.shields.io/pypi/v/nextion)](https://pypi.org/project/nextion/)
+
+Lightweight asyncio library for controlling [Nextion](https://nextion.tech/) HMI displays over a serial port. Requires Python 3.11+.
 
 ## Installation
-### Pypi
-`pip3 install nextion`
 
-## Simple usage:
+```bash
+pip install nextion
+```
+
+## Quick start
+
 ```python
 import asyncio
 import logging
-import random
 
-from nextion import Nextion, EventType
+from nextion import EventType, Nextion
 
-class App:
-    def __init__(self):
-        self.client = Nextion('/dev/ttyS1', 9600, self.event_handler)
 
-    # Note: async event_handler can be used only in versions 1.8.0+ (versions 1.8.0+ supports both sync and async versions)
-    async def event_handler(self, type_, data):
-        if type_ == EventType.STARTUP:
-            print('We have booted up!')
-        elif type_ == EventType.TOUCH:
-            print('A button (id: %d) was touched on page %d' % (data.component_id, data.page_id))
+async def event_handler(type_, data):
+    if type_ == EventType.STARTUP:
+        print("Display has booted up")
+    elif type_ == EventType.TOUCH:
+        print(f"Component {data.component_id} touched on page {data.page_id}")
 
-        logging.info('Event %s data: %s', type, str(data))
 
-        print(await self.client.get('field1.txt'))
+async def main():
+    client = Nextion("/dev/ttyS1", 9600, event_handler)
+    device_info = await client.connect()
+    print(f"Connected to {device_info.model}")
 
-    async def run(self):
-        await self.client.connect()
+    await client.set("t0.txt", "Hello")
+    await client.set("n0.val", 42)
+    print(await client.get("t0.txt"))
 
-        # await client.sleep()
-        # await client.wakeup()
+    await client.command("page 1")
 
-        # await client.command('sendxy=0')
+    await asyncio.Event().wait()  # keep running to receive events
 
-        print(await self.client.get('sleep'))
-        print(await self.client.get('field1.txt'))
 
-        await self.client.set('field1.txt', "%.1f" % (random.randint(0, 1000) / 10))
-        await self.client.set('field2.txt', "%.1f" % (random.randint(0, 1000) / 10))
-
-        await self.client.set('field3.txt', random.randint(0, 100))
-
-        print('finished')
-
-if __name__ == '__main__':
-    logging.basicConfig(
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        level=logging.DEBUG,
-        handlers=[
-            logging.StreamHandler()
-        ])
-    loop = asyncio.get_event_loop()
-    app = App()
-    asyncio.ensure_future(app.run())
-    loop.run_forever()
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
 ```
 
-### Nextion constructor parameters
+## Constructor
+
+```python
+Nextion(
+    url: str,                      # serial port, e.g. "/dev/ttyUSB0" or "COM3"
+    baud_rate: int | None = None,  # tried first; other supported rates are probed if it fails
+    event_handler=...,             # sync or async callable(type_: EventType, data); logs events by default
+    reconnect_attempts: int = 3,   # retries for a command that times out
+    encoding: str = "ascii",       # text encoding used on the serial line
+)
 ```
-url: str # serial dev
-baudrate: int # baud rate
-event_handler: Callable[[EventType, Any], Awaitable[None] | None] # Event handler function
-loop=asyncio.get_event_loop() # your own event loop
-reconnect_attempts: int = 3 # how many times to try to retry command in case of failure
-encoding: str = 'ascii' # Nextion encoding
+
+Supported baud rates: 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400.
+
+## API
+
+| Member | Description |
+|---|---|
+| `await connect()` | Find the display, enable command responses (`bkcmd=3`) and return `DeviceInfo` (`address`, `model`, `firmware_version`, `serial_number`, `flash_size`). |
+| `await disconnect()` / `await reconnect()` | Close or reopen the serial connection. |
+| `await get(key)` | Read an attribute, e.g. `get("t0.txt")` returns `str`, `get("n0.val")` returns `int`. |
+| `await set(key, value)` | Assign a `str` or `int` attribute. While the display sleeps the assignment is deferred until wake-up and `None` is returned; pass `do_not_defer=True` to send it anyway. |
+| `await command(cmd)` | Send any [instruction](https://nextion.tech/instruction-set/), e.g. `command("page 1")`. Returns returned data, or `True` on success. |
+| `await sleep()` / `await wakeup()` | Put the display to sleep or wake it up. |
+| `sleeping` | Whether the display is currently asleep. |
+| `await dim(value)` | Set backlight brightness, 0–100. |
+| `device_info` | `DeviceInfo` from the last successful `connect()`. |
+| `encoding` | Get or set the text encoding (see below). |
+| `await upload_firmware(file, upload_baud=None)` | Upload a `.tft` file opened in binary mode. |
+
+`get`, `set` and `command` accept a `timeout` in seconds (default 0.5).
+
+### Errors
+
+All exceptions are importable from `nextion`:
+
+- `CommandFailed` – the display rejected the instruction; `code` holds the return code.
+- `CommandTimeout` – no response after all reconnect attempts.
+- `ConnectionFailed` – the display could not be reached at any baud rate, or the client is not connected.
+
+### Encoding
+
+`encoding` only changes how text is encoded on the serial line; it must match the character set selected in your Nextion project and be covered by its fonts. It can be changed at any time. For example, to show a degree sign in an `iso-8859-1` project:
+
+```python
+client.encoding = "latin-1"
+await client.set("t0.txt", "21°C")
 ```
 
-### Nextion parameters
-#### Encoding
-You can update encoding on fly (This changes encoding of serial communication only):
+## Events
 
-`client.encoding = 'latin-1'`
+The event handler is called for every event sent by the display:
 
-Get current set encoding (Not fetched from the device)
+| `EventType` | Data | Data attributes |
+|---|---|---|
+| `TOUCH` | `TouchDataPayload` | `page_id`, `component_id`, `touch_event` |
+| `TOUCH_COORDINATE` | `TouchCoordinateDataPayload` | `x`, `y`, `touch_event` |
+| `TOUCH_COORDINATE_IN_SLEEP` | `TouchCoordinateDataPayload` | `x`, `y`, `touch_event` |
+| `AUTO_SLEEP` | `None` | – |
+| `AUTO_WAKE` | `None` | – |
+| `STARTUP` | `None` | – |
+| `SD_CARD_UPGRADE` | `None` | – |
 
-`print(client.encoding)`
+`touch_event` is `1` for press and `0` for release. Touch events are only sent for components with **Send Component ID** enabled in the Nextion Editor.
 
-## Event handling
+## Firmware upload
 
-```event_handler``` method in the example above will be called on every event coming from the display.
+Installing the package adds the `nextion-fw-upload` command (or run `python -m nextion.console_scripts.upload_firmware`):
 
-| EventType        | Data                       | Data attributes                    |
-|------------------|----------------------------|------------------------------------|
-| TOUCH            | TouchDataPayload           | page_id, component_id, touch_event |
-| TOUCH_COORDINATE | TouchCoordinateDataPayload | x, y, touch_event                  |
-| TOUCH_COORDINATE_IN_SLEEP | TouchCoordinateDataPayload | x, y, touch_event                  |
-| AUTO_SLEEP       | None                       | -                                  |
-| AUTO_WAKE        | None                       | -                                  |
-| STARTUP          | None                       | -                                  |
-| SD_CARD_UPGRADE  | None                       | -                                  |
-
-For some components in the Nextion Editor you need to check `Send Component ID` for required event.
-
-# Firmware uploading
-If you installed the library you should have `nextion-fw-upload` command in your PATH.
 ```bash
-nextion-fw-upload -h
+nextion-fw-upload /dev/ttyUSB0 project.tft --baud 9600 --upload_baud 115200
 ```
 
-Otherwise use next command in the root of the project:
-```bash
-python -m nextion.console_scripts.upload_firmware -h
 ```
-
-Usage (check with option `-h`)
-```
-usage: nextion-fw-upload [-h]
-                         [-b {2400,4800,9600,19200,38400,57600,115200,230400}]
-                         [-ub {2400,4800,9600,19200,38400,57600,115200,230400}]
-                         [-v]
+usage: nextion-fw-upload [-h] [-b {2400,4800,9600,19200,38400,57600,115200,230400}]
+                         [-ub {2400,4800,9600,19200,38400,57600,115200,230400}] [-v]
                          device file
 
 positional arguments:
   device                device serial port
   file                  firmware file *.tft
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  -b {2400,4800,9600,19200,38400,57600,115200,230400}, --baud {2400,4800,9600,19200,38400,57600,115200,230400}
+  -b, --baud {2400,4800,9600,19200,38400,57600,115200,230400}
                         baud rate
-  -ub {2400,4800,9600,19200,38400,57600,115200,230400}, --upload_baud {2400,4800,9600,19200,38400,57600,115200,230400}
+  -ub, --upload_baud {2400,4800,9600,19200,38400,57600,115200,230400}
                         upload baud rate
   -v, --verbose         output debug messages
 ```
 
-# Additional resources:
-- https://nextion.tech/instruction-set/
-- [PyPI](https://pypi.org/project/nextion/)
+`--baud` is the display's current baud rate (probed if omitted); `--upload_baud` is the rate used for the transfer (default 115200). If uploads fail, try a lower `--upload_baud`.
+
+## Resources
+
+- [Nextion Instruction Set](https://nextion.tech/instruction-set/)
+- [Nextion Upload Protocol v1.2](https://nextion.tech/2026/07/07/nextion-upload-protocol-v1-2/)
