@@ -44,8 +44,7 @@ def main():
         format="%(asctime)s %(levelname)-8s %(name)-15s %(message)s",
     )
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(upload(args))
+    asyncio.run(upload(args))
 
 
 if __name__ == "__main__":
