@@ -247,6 +247,23 @@ async def test_upload_firmware_switches_baud_in_place(tmp_path):
     assert client._connection is transport.protocol
 
 
+async def test_upload_firmware_rejects_empty_file(tmp_path):
+    firmware = tmp_path / "empty.tft"
+    firmware.touch()
+    client = Nextion("/dev/ttyS1", 9600)
+    client._sleeping = False
+    protocol = NextionProtocol(client._handle_event)
+    transport = FakeUploadTransport(protocol)
+    protocol.connection_made(transport)
+    client._connection = protocol
+
+    with firmware.open("rb") as file:
+        with pytest.raises(ValueError, match="Firmware file is empty"):
+            await client.upload_firmware(file, 115200)
+
+    assert transport.written == []
+
+
 async def test_encoding_setter_is_used_for_commands(client, protocol):
     protocol.write.side_effect = lambda data: protocol.data_received(
         b"\x70\x32\x31\xb0C\xff\xff\xff"

@@ -136,6 +136,8 @@ options:
 
 `--baud` is the display's current baud rate (probed if omitted); `--upload_baud` is the rate used for the transfer (default 115200). If uploads fail, try a lower `--upload_baud`.
 
+Empty firmware files are rejected before sending any upload commands to the display.
+
 ## Resources
 
 - [Nextion Instruction Set](https://nextion.tech/instruction-set/)
