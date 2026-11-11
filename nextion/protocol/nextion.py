@@ -1,7 +1,7 @@
 import binascii
+from collections.abc import Callable
 from enum import IntEnum
 import logging
-import typing
 
 from nextion.protocol.base import BasicProtocol
 
@@ -46,7 +46,7 @@ class NextionProtocol(BasicProtocol):
         0xFE: 4,  # Transparent Data Ready
     }
 
-    def __init__(self, event_message_handler: typing.Callable):
+    def __init__(self, event_message_handler: Callable[[bytes], None]):
         super().__init__()
         self.buffer = b""
         self.dropped_buffer = b""

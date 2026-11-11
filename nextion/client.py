@@ -1,13 +1,14 @@
 import asyncio
 import binascii
 from collections import namedtuple
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 import inspect
 from io import BufferedReader
 import logging
 import os
 import struct
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any
 import warnings
 
 import serial_asyncio_fast as serial_asyncio
@@ -28,7 +29,7 @@ logger = logging.getLogger("nextion").getChild(__name__)
 TouchDataPayload = namedtuple("TouchDataPayload", "page_id component_id touch_event")
 TouchCoordinateDataPayload = namedtuple("TouchCoordinateDataPayload", "x y touch_event")
 
-ValueType = Union[str, float, int]
+ValueType = str | float | int
 
 
 async def _default_event_handler(type_, data):
@@ -47,22 +48,22 @@ class DeviceInfo:
 class Nextion:
     """A class for interacting with a Nextion device"""
 
-    device_info: Optional[DeviceInfo]
-    _deferred_sets: Dict[str, ValueType]
+    device_info: DeviceInfo | None
+    _deferred_sets: dict[str, ValueType]
 
     def __init__(
         self,
         url: str,
-        baud_rate: Optional[int] = None,
-        event_handler: Callable[
-            [EventType, Any], Union[Awaitable[None], None]
-        ] = _default_event_handler,
+        baud_rate: int | None = None,
+        event_handler: Callable[[EventType, Any], Awaitable[None] | None] = (
+            _default_event_handler
+        ),
         reconnect_attempts: int = 3,
         encoding: str = "ascii",
     ):
         self._url = url
         self._baud_rate = baud_rate
-        self._connection: Optional[NextionProtocol] = None
+        self._connection: NextionProtocol | None = None
         self._command_lock = asyncio.Lock()
         self._reconnect_attempts = reconnect_attempts
         self._encoding = encoding
@@ -261,7 +262,7 @@ class Nextion:
     async def _update_sleep_status(self) -> None:
         self._sleeping = bool(await self._command("get sleep", attempts=1))
 
-    def _get_priority_ordered_baud_rates(self) -> List[int]:
+    def _get_priority_ordered_baud_rates(self) -> list[int]:
         baud_rates = BAUD_RATES.copy()
         if self._baud_rate:  # if a baud rate specified put it first in array
             try:
@@ -295,7 +296,7 @@ class Nextion:
 
     async def set(
         self, key: str, value: ValueType, timeout=IO_TIMEOUT, do_not_defer=False
-    ) -> Union[ValueType, None]:
+    ) -> ValueType | None:
         """Set a value on the device
 
         Returns None is device is sleeping and set is scheduled for execution after wakeup
@@ -322,8 +323,8 @@ class Nextion:
             return await self.command(f"{key}={out_value}", timeout=timeout)
 
     async def _command(
-        self, command: str, timeout=IO_TIMEOUT, attempts: Union[int, None] = None
-    ) -> Union[ValueType, None]:
+        self, command: str, timeout=IO_TIMEOUT, attempts: int | None = None
+    ) -> ValueType | None:
         attempts_remained = (
             attempts if attempts is not None else self._reconnect_attempts
         )
@@ -345,7 +346,7 @@ class Nextion:
             self._write_command_raw(command.encode(self._encoding))
 
             result = None
-            data: Union[ValueType, None] = None
+            data: ValueType | None = None
             finished = False
 
             while not finished:
