@@ -1,11 +1,13 @@
+import asyncio
 import binascii
 import logging
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
 from nextion import Nextion
 from nextion.client import DeviceInfo
+from nextion.exceptions import CommandTimeout, NoValidReply
 from nextion.protocol import BasicProtocol
 
 logger = logging.getLogger("nextion").getChild(__name__)
@@ -109,3 +111,85 @@ async def test_connect(protocol_fixture, request, create_serial_connection):
     protocol = request.getfixturevalue(protocol_fixture)
     client = Nextion("/dev/ttyS1", 9600, None)
     await connect_and_test(client, protocol, create_serial_connection)
+
+
+async def test_failed_baud_probe_closes_before_next_attempt():
+    client = Nextion("/dev/ttyS1", 9600)
+    first = Mock(wait_connection=AsyncMock(), close=AsyncMock())
+    second = Mock(wait_connection=AsyncMock(), close=AsyncMock())
+    client._get_priority_ordered_baud_rates = Mock(return_value=[9600, 19200])
+
+    async def create_connection(baud):
+        if baud == 19200:
+            first.close.assert_awaited_once()
+            return second
+        return first
+
+    client._create_serial_connection = AsyncMock(side_effect=create_connection)
+    client._read_packet = AsyncMock(return_value=b"")
+    client._attempt_connect_messages = AsyncMock(
+        side_effect=[NoValidReply("bad reply"), None]
+    )
+    with patch("nextion.client.asyncio.sleep", new_callable=AsyncMock):
+        await client._try_connect_on_different_baudrates()
+
+    assert client._connection is second
+    assert client._baud_rate == 19200
+    second.close.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "error", [CommandTimeout("sleep timeout"), asyncio.CancelledError()]
+)
+async def test_connect_closes_connection_when_initialization_fails(error):
+    client = Nextion("/dev/ttyS1", 9600)
+    connection = Mock(close=AsyncMock())
+
+    async def establish_connection():
+        client._connection = connection
+        client.device_info = DeviceInfo(
+            "address", "model", "version", "serial", "flash"
+        )
+
+    client._try_connect_on_different_baudrates = AsyncMock(
+        side_effect=establish_connection
+    )
+    client._command = AsyncMock(side_effect=[True, error])
+    with pytest.raises(type(error)):
+        await client.connect()
+
+    assert client._command.await_args_list == [
+        call("bkcmd=3", attempts=1),
+        call("get sleep", attempts=1),
+    ]
+    connection.close.assert_awaited_once()
+    assert client._connection is None
+
+
+async def test_cancelled_baud_probe_closes_connection():
+    client = Nextion("/dev/ttyS1", 9600)
+    connection = Mock(
+        wait_connection=AsyncMock(side_effect=asyncio.CancelledError), close=AsyncMock()
+    )
+    client._create_serial_connection = AsyncMock(return_value=connection)
+    with pytest.raises(asyncio.CancelledError):
+        await client._connect_at_baud(9600)
+    connection.close.assert_awaited_once()
+    assert client._connection is None
+
+
+@pytest.mark.parametrize("bad_reply", [b"comok short", b"comok \xff"])
+async def test_malformed_connect_reply_tries_broadcast(bad_reply):
+    client = Nextion("/dev/ttyS1", 9600)
+    client._write_command_raw = Mock()
+    client._read_packet = AsyncMock(
+        side_effect=[bad_reply, b"comok 1,67-0,model,130,61488,serial,16777216"]
+    )
+    await client._attempt_connect_messages(0.1)
+    assert client._write_command_raw.call_args_list == [
+        call(b"connect"),
+        call(b"\xff\xffconnect"),
+    ]
+    assert client.device_info == DeviceInfo(
+        "67-0", "model", "130", "serial", "16777216"
+    )
