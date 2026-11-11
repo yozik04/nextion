@@ -9,8 +9,8 @@ class BasicProtocol(asyncio.Protocol):
     def __init__(self):
         self.transport = None
         self.queue = asyncio.Queue()
-        self.connect_future = asyncio.get_event_loop().create_future()
-        self.disconnect_future = asyncio.get_event_loop().create_future()
+        self.connect_future = asyncio.get_running_loop().create_future()
+        self.disconnect_future = asyncio.get_running_loop().create_future()
 
     async def close(self):
         if self.transport:

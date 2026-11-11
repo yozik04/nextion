@@ -80,20 +80,6 @@ def create_serial_connection():
         yield create_serial_connection
 
 
-@pytest.fixture
-def protocol_1_61_1():
-    with patch(
-        "nextion.client.NextionProtocol", DummyNextionProtocol_1_61_1()
-    ) as protocol:
-        yield protocol
-
-
-@pytest.fixture
-def protocol_older():
-    with patch("nextion.client.NextionProtocol", DummyOldNextionProtocol()) as protocol:
-        yield protocol
-
-
 async def connect_and_test(client: Nextion, protocol, create_serial_connection):
     async def on_connection_made(*args, **kwargs):
         protocol.connection_made(Mock())
@@ -106,9 +92,11 @@ async def connect_and_test(client: Nextion, protocol, create_serial_connection):
     assert client.is_sleeping() is False
 
 
-@pytest.mark.parametrize("protocol_fixture", ["protocol_1_61_1", "protocol_older"])
-async def test_connect(protocol_fixture, request, create_serial_connection):
-    protocol = request.getfixturevalue(protocol_fixture)
+@pytest.mark.parametrize(
+    "protocol_class", [DummyNextionProtocol_1_61_1, DummyOldNextionProtocol]
+)
+async def test_connect(protocol_class, create_serial_connection):
+    protocol = protocol_class()
     client = Nextion("/dev/ttyS1", 9600, None)
     await connect_and_test(client, protocol, create_serial_connection)
 

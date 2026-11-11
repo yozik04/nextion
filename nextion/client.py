@@ -218,7 +218,10 @@ class Nextion:
 
     async def _create_serial_connection(self, baud: int):
         _, connection = await serial_asyncio.create_serial_connection(
-            asyncio.get_event_loop(), self._make_protocol, url=self._url, baudrate=baud
+            asyncio.get_running_loop(),
+            self._make_protocol,
+            url=self._url,
+            baudrate=baud,
         )
 
         return connection
@@ -489,7 +492,7 @@ class Nextion:
 
         file_size = os.fstat(file.fileno()).st_size
 
-        logger.info(f"About to upload {file_size} bytes")
+        logger.info("About to upload %d bytes", file_size)
         await self.set("sleep", 0)
         await asyncio.sleep(0.15)
         try:
@@ -533,4 +536,4 @@ class Nextion:
         finally:
             file.close()
 
-        logger.info("Successfully uploaded %d bytes" % uploaded_bytes)
+        logger.info("Successfully uploaded %d bytes", uploaded_bytes)

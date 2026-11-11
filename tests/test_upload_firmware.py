@@ -1,48 +1,54 @@
-import subprocess
+import asyncio
 import sys
-import textwrap
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from nextion.console_scripts.upload_firmware import main
 
 
-def test_main_without_current_event_loop(tmp_path):
+@pytest.fixture
+def firmware(tmp_path):
     firmware = tmp_path / "display.tft"
     firmware.write_bytes(b"firmware")
+    return firmware
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            textwrap.dedent("""
-                import asyncio
-                from unittest.mock import AsyncMock, patch
 
-                from nextion.console_scripts.upload_firmware import main
-
-                asyncio.set_event_loop(None)
-                with patch("nextion.console_scripts.upload_firmware.Nextion") as factory:
-                    client = factory.return_value
-                    client.connect = AsyncMock()
-                    client.upload_firmware = AsyncMock()
-
-                    main()
-
-                    factory.assert_called_once_with(
-                        "/dev/test", 9600, reconnect_attempts=1
-                    )
-                    client.connect.assert_awaited_once_with()
-                    client.upload_firmware.assert_awaited_once()
-                    file, baud = client.upload_firmware.await_args.args
-                    assert file.read() == b"firmware"
-                    assert baud == 115200
-                    file.close()
-                """),
-            "/dev/test",
-            "-b",
-            "9600",
-            str(firmware),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=10,
+@pytest.fixture
+def nextion(firmware, monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["nextion-fw-upload", "/dev/test", "-b", "9600", str(firmware)]
     )
+    # Python 3.14 has no implicit event loop; main() must not rely on one.
+    asyncio.set_event_loop(None)
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    with patch("nextion.console_scripts.upload_firmware.Nextion") as factory:
+        client = factory.return_value
+        client.connect = AsyncMock()
+        client.upload_firmware = AsyncMock()
+        client.disconnect = AsyncMock()
+        yield factory
+
+
+def test_main_uploads_firmware(nextion, firmware):
+    main()
+
+    nextion.assert_called_once_with("/dev/test", 9600, reconnect_attempts=1)
+    client = nextion.return_value
+    client.connect.assert_awaited_once_with()
+    file, baud = client.upload_firmware.await_args.args
+    assert file.name == str(firmware)
+    assert file.closed
+    assert baud == 115200
+    client.disconnect.assert_awaited_once_with()
+
+
+def test_main_exits_with_error_when_upload_fails(nextion):
+    client = nextion.return_value
+    client.upload_firmware.side_effect = OSError("no reply")
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 1
+    client.disconnect.assert_awaited_once_with()

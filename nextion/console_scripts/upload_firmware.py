@@ -1,19 +1,20 @@
 import argparse
 import asyncio
 import logging
+import sys
 
 from nextion.client import Nextion
 from nextion.constants import BAUD_RATES
 
 
 async def upload(args):
-    nextion = Nextion(args.device, args.baud, reconnect_attempts=1)
-    await nextion.connect()
-
-    try:
-        await nextion.upload_firmware(args.file, args.upload_baud)
-    except Exception:
-        logging.exception("Failed to upload firmware")
+    with open(args.file, "rb") as file:
+        nextion = Nextion(args.device, args.baud, reconnect_attempts=1)
+        await nextion.connect()
+        try:
+            await nextion.upload_firmware(file, args.upload_baud)
+        finally:
+            await nextion.disconnect()
 
 
 def main():
@@ -33,9 +34,7 @@ def main():
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="output debug messages"
     )
-    parser.add_argument(
-        "file", type=argparse.FileType("br"), help="firmware file *.tft"
-    )
+    parser.add_argument("file", help="firmware file *.tft")
 
     args = parser.parse_args()
 
@@ -44,7 +43,11 @@ def main():
         format="%(asctime)s %(levelname)-8s %(name)-15s %(message)s",
     )
 
-    asyncio.run(upload(args))
+    try:
+        asyncio.run(upload(args))
+    except Exception:
+        logging.exception("Failed to upload firmware")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
