@@ -190,3 +190,58 @@ async def test_command_after_disconnect_raises_connection_failed(client, protoco
     with pytest.raises(ConnectionFailed, match="Connection is not established"):
         await client.command("get sleep")
     protocol.write.assert_not_called()
+
+
+class FakeUploadTransport:
+    """Serial transport that replies like a Nextion device during an upload."""
+
+    def __init__(self, protocol):
+        self.protocol = protocol
+        self.serial = Mock(baudrate=9600)
+        self.serial.flush.side_effect = self._on_flush
+        self.written = []
+        self.flushed_before_baud_change = False
+
+    def _on_flush(self):
+        self.flushed_before_baud_change = self.serial.baudrate == 9600
+
+    def set_protocol(self, protocol):
+        self.protocol = protocol
+
+    def get_write_buffer_size(self):
+        return 0
+
+    def write(self, data):
+        self.written.append(data)
+        if data.startswith(b"whmi-wri"):
+            # The ready byte arrives at the upload baud straight after the switch.
+            asyncio.get_running_loop().call_soon(self._reply_ready)
+        elif self.serial.baudrate == 115200:
+            self.protocol.data_received(b"\x05")
+        else:
+            self.protocol.data_received(b"\x01\xff\xff\xff")
+
+    def _reply_ready(self):
+        assert self.serial.baudrate == 115200
+        self.protocol.data_received(b"\x05")
+
+
+async def test_upload_firmware_switches_baud_in_place(tmp_path):
+    firmware = tmp_path / "fw.tft"
+    firmware.write_bytes(b"a" * 4096 + b"b" * 10)
+
+    client = Nextion("/dev/ttyS1", 9600)
+    client._sleeping = False
+    protocol = NextionProtocol(client._handle_event)
+    transport = FakeUploadTransport(protocol)
+    protocol.connection_made(transport)
+    client._connection = protocol
+
+    with firmware.open("rb") as file:
+        await client.upload_firmware(file, 115200)
+
+    assert transport.flushed_before_baud_change
+    assert transport.serial.baudrate == 115200
+    assert b"whmi-wri 4106,115200,0\xff\xff\xff" in transport.written
+    assert transport.written[-2:] == [b"a" * 4096, b"b" * 10]
+    assert client._connection is transport.protocol
