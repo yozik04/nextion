@@ -86,30 +86,28 @@ class NextionProtocol(BasicProtocol):
             self.dropped_buffer = b""
 
     def _extract_packet(self):
-        if len(self.buffer) < 3:
-            return None
+        while len(self.buffer) >= 3:
+            # Invalid-instruction replies share the startup packet's leading byte.
+            if self.buffer.startswith(b"\x00" + self.EOL):
+                return self._extract_varied_length_packet()
 
-        expected_packet_length = self.PACKET_LENGTH_MAP.get(self.buffer[0])
-        if expected_packet_length is None:
-            return self._extract_varied_length_packet()
-        else:
-            return self._extract_fixed_length_packet(expected_packet_length)
+            expected_packet_length = self.PACKET_LENGTH_MAP.get(self.buffer[0])
+            if expected_packet_length is None:
+                return self._extract_varied_length_packet()
+            if len(self.buffer) < expected_packet_length:
+                return None
 
-    def _extract_fixed_length_packet(self, expected_packet_length):
-        buffer_len = len(self.buffer)
-        if buffer_len < expected_packet_length:
-            return None
+            full_message = self.buffer[:expected_packet_length]
+            if full_message.endswith(self.EOL):
+                self.buffer = self.buffer[expected_packet_length:]
+                return full_message[:-3]
 
-        full_message = self.buffer[:expected_packet_length]
-        if not full_message.endswith(self.EOL):
             message = self._extract_varied_length_packet()
             if message is None:
                 return None
 
             self.dropped_buffer += message + self.EOL
-            return self._extract_packet()
-        self.buffer = self.buffer[expected_packet_length:]
-        return full_message[:-3]
+        return None
 
     def _extract_varied_length_packet(self):
         message, eol, leftover = self.buffer.partition(self.EOL)
