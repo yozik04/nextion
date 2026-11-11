@@ -1,4 +1,4 @@
-# Nextion serial client [![Build](https://github.com/yozik04/nextion/actions/workflows/python-package.yml/badge.svg)](https://github.com/yozik04/nextion/actions/workflows/python-package.yml)
+# Nextion serial client [![Build](https://github.com/yozik04/nextion/actions/workflows/test.yml/badge.svg)](https://github.com/yozik04/nextion/actions/workflows/test.yml)
 Lightweight Python 3.8+ async library to control Nextion displays.
 
 ## Installation
@@ -87,7 +87,7 @@ Get current set encoding (Not fetched from the device)
 |------------------|----------------------------|------------------------------------|
 | TOUCH            | TouchDataPayload           | page_id, component_id, touch_event |
 | TOUCH_COORDINATE | TouchCoordinateDataPayload | x, y, touch_event                  |
-| TOUCH_IN_SLEEP   | TouchCoordinateDataPayload | x, y, touch_event                  |
+| TOUCH_COORDINATE_IN_SLEEP | TouchCoordinateDataPayload | x, y, touch_event                  |
 | AUTO_SLEEP       | None                       | -                                  |
 | AUTO_WAKE        | None                       | -                                  |
 | STARTUP          | None                       | -                                  |
